@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:layer-malt-69788441.figma.site)",
+      "mcp__Claude_in_Chrome__tabs_context_mcp",
+      "WebFetch(domain:www.figma.com)",
+      "mcp__Claude_in_Chrome__navigate",
+      "mcp__Claude_in_Chrome__computer",
+      "mcp__Claude_in_Chrome__find",
+      "Bash(npm create:*)",
+      "Bash(cp -r \"F:/SIMLABV2/Figma Import/components/ui/.\" \"F:/SIMLABV2/simlab-v2/src/components/ui/\")",
+      "Bash(cp -r \"F:/SIMLABV2/Figma Import/components/figma/.\" \"F:/SIMLABV2/simlab-v2/src/components/figma/\")",
+      "Bash(cp \"F:/SIMLABV2/Figma Import/components/DashboardCard.tsx\" \"F:/SIMLABV2/Figma Import/components/PageLayout.tsx\" \"F:/SIMLABV2/simlab-v2/src/components/\")",
+      "Bash(cp -r \"F:/SIMLABV2/Figma Import/pages/.\" \"F:/SIMLABV2/simlab-v2/src/pages/\")",
+      "Bash(cp \"F:/SIMLABV2/Figma Import/styles/globals.css\" \"F:/SIMLABV2/simlab-v2/src/styles/\")",
+      "Bash(xargs -I{} sed -i -E 's/\\(from \"[^\"]+\\)@[0-9]+\\\\.[0-9]+\\\\.[0-9]+\\(\"\\)/\\\\1\\\\2/g' {})",
+      "mcp__Claude_in_Chrome__javascript_tool",
+      "Bash(curl -s -o \"F:/SIMLABV2/simlab-v2/src/assets/logo-statistika.png\" \"https://layer-malt-69788441.figma.site/_assets/v11/28abaeb5c3b68dcc8880521943d16da440bb17af.png\")",
+      "Bash(npm install:*)",
+      "Bash(npm run:*)",
+      "Bash(curl -s http://localhost:5173/ -o /dev/null -w \"%{http_code}\\\\n\")",
+      "Bash(curl -s \"http://localhost:5173/src/main.tsx\")",
+      "Bash(curl -s \"http://localhost:5173/src/routes.ts\")",
+      "Bash(curl -s \"http://localhost:5173/src/pages/Dashboard.tsx\")",
+      "Bash(curl -s -o /dev/null -w '%{http_code}' http://localhost:5173/src/pages/__TRACKED_VAR__)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(curl -s \"http://localhost:5173/src/styles/globals.css?direct\")"
+    ]
+  }
+}
