@@ -1,0 +1,406 @@
+// SIMLAB V2 — Prisma Schema
+// Sistem Informasi Manajemen Laboratorium Statistika UII
+//
+// Konvensi:
+// - Semua primary key menggunakan UUID (@default(uuid()))
+// - Nama tabel di database disesuaikan ke snake_case via @@map
+// - Nama kolom di database disesuaikan ke snake_case via @map
+// - Timestamp createdAt/updatedAt otomatis menggunakan @default(now()) dan @updatedAt
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum RoleName {
+  SUPER_ADMIN
+  ADMIN
+  KEPALA_LAB
+  DOSEN
+  LABORAN
+  STAFF
+}
+
+enum AssetCondition {
+  GOOD
+  MINOR_DAMAGE
+  MAJOR_DAMAGE
+}
+
+enum AssetStatus {
+  AVAILABLE
+  BORROWED
+  DAMAGED
+  MAINTENANCE
+}
+
+enum EquipmentStatus {
+  AVAILABLE
+  OUT_OF_STOCK
+  DAMAGED
+}
+
+enum LoanType {
+  TA
+  PRACTICUM
+}
+
+enum LoanStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  ACTIVE
+  RETURNED
+  OVERDUE
+  CANCELLED
+}
+
+enum EquipmentLoanStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  ACTIVE
+  RETURNED
+  OVERDUE
+  CANCELLED
+}
+
+enum ConsumableTransactionType {
+  IN
+  OUT
+}
+
+enum ClearanceStatus {
+  DRAFT
+  SUBMITTED
+  PENDING_LECTURER
+  PENDING_KEPALA_LAB
+  PENDING_LABORAN
+  APPROVED
+  REJECTED
+}
+
+enum DocumentType {
+  CLEARANCE_LETTER
+  LOAN_AGREEMENT
+  EQUIPMENT_LOAN
+  OTHER
+}
+
+// ============================================================================
+// USERS & ROLES
+// ============================================================================
+
+model User {
+  id          String   @id @default(uuid()) @db.Uuid
+  uid         String   @unique
+  email       String   @unique
+  displayName String   @map("display_name")
+  waNumber    String?  @map("wa_number")
+  institute   String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  roles                  UserRole[]
+  kepalaOfLabs           Laboratory[]            @relation("LaboratoryKepalaLab")
+  laboranOfLabs          LaboratoryLaboran[]
+  loansAsBorrower        Loan[]                  @relation("LoanBorrower")
+  loansAsLecturer        Loan[]                  @relation("LoanLecturer")
+  equipmentLoans         EquipmentLoan[]
+  consumableTransactions ConsumableTransaction[]
+  clearanceLetters       ClearanceLetter[]       @relation("ClearanceOwner")
+  clearanceApprovals     ClearanceLetter[]       @relation("ClearanceApprover")
+  digitalSignatures      DigitalSignature[]
+  activityLogs           ActivityLog[]
+
+  @@index([email])
+  @@index([uid])
+  @@map("users")
+}
+
+model Role {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        RoleName @unique
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  users UserRole[]
+
+  @@map("roles")
+}
+
+model UserRole {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  roleId    String   @map("role_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
+  @@map("user_roles")
+}
+
+// ============================================================================
+// LABORATORIES
+// ============================================================================
+
+model Laboratory {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  description String?
+  kepalaLabId String?  @map("kepala_lab_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  kepalaLab User?               @relation("LaboratoryKepalaLab", fields: [kepalaLabId], references: [id], onDelete: SetNull)
+  laborans  LaboratoryLaboran[]
+  assets    Asset[]
+  equipment Equipment[]
+
+  @@index([kepalaLabId])
+  @@map("laboratories")
+}
+
+model LaboratoryLaboran {
+  id           String   @id @default(uuid()) @db.Uuid
+  laboratoryId String   @map("laboratory_id") @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  laboratory Laboratory @relation(fields: [laboratoryId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([laboratoryId, userId])
+  @@index([laboratoryId])
+  @@index([userId])
+  @@map("laboratory_laborans")
+}
+
+// ============================================================================
+// ASSETS (LAPTOP) & EQUIPMENT (NON-LAPTOP)
+// ============================================================================
+
+model Asset {
+  id           String         @id @default(uuid()) @db.Uuid
+  name         String
+  code         String         @unique
+  condition    AssetCondition @default(GOOD)
+  status       AssetStatus    @default(AVAILABLE)
+  qrHash       String?        @unique @map("qr_hash")
+  laboratoryId String?        @map("laboratory_id") @db.Uuid
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+
+  laboratory Laboratory? @relation(fields: [laboratoryId], references: [id], onDelete: SetNull)
+  loans      Loan[]
+
+  @@index([status])
+  @@index([laboratoryId])
+  @@map("assets")
+}
+
+model Equipment {
+  id           String          @id @default(uuid()) @db.Uuid
+  name         String
+  category     String?
+  stock        Int             @default(0)
+  condition    AssetCondition  @default(GOOD)
+  status       EquipmentStatus @default(AVAILABLE)
+  laboratoryId String?         @map("laboratory_id") @db.Uuid
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+
+  laboratory Laboratory?         @relation(fields: [laboratoryId], references: [id], onDelete: SetNull)
+  loanItems  EquipmentLoanItem[]
+
+  @@index([status])
+  @@index([laboratoryId])
+  @@map("equipment")
+}
+
+// ============================================================================
+// LOANS (LAPTOP)
+// ============================================================================
+
+model Loan {
+  id             String     @id @default(uuid()) @db.Uuid
+  userId         String     @map("user_id") @db.Uuid
+  assetId        String     @map("asset_id") @db.Uuid
+  lecturerId     String?    @map("lecturer_id") @db.Uuid
+  type           LoanType
+  status         LoanStatus @default(PENDING)
+  startDate      DateTime   @map("start_date")
+  endDate        DateTime   @map("end_date")
+  returnDate     DateTime?  @map("return_date")
+  dayLate        Int        @default(0) @map("day_late")
+  fine           Decimal    @default(0) @db.Decimal(12, 2)
+  thesisTitle    String?    @map("thesis_title")
+  thesisAbstract String?    @map("thesis_abstract") @db.Text
+  notes          String?    @db.Text
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
+
+  borrower User  @relation("LoanBorrower", fields: [userId], references: [id], onDelete: Restrict)
+  asset    Asset @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  lecturer User? @relation("LoanLecturer", fields: [lecturerId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([assetId])
+  @@index([lecturerId])
+  @@index([status])
+  @@map("loans")
+}
+
+// ============================================================================
+// EQUIPMENT LOANS (NON-LAPTOP, MULTI-ITEM)
+// ============================================================================
+
+model EquipmentLoan {
+  id        String              @id @default(uuid()) @db.Uuid
+  userId    String              @map("user_id") @db.Uuid
+  startDate DateTime            @map("start_date")
+  endDate   DateTime            @map("end_date")
+  status    EquipmentLoanStatus @default(PENDING)
+  notes     String?             @db.Text
+  createdAt DateTime            @default(now()) @map("created_at")
+  updatedAt DateTime            @updatedAt @map("updated_at")
+
+  user  User                @relation(fields: [userId], references: [id], onDelete: Restrict)
+  items EquipmentLoanItem[]
+
+  @@index([userId])
+  @@index([status])
+  @@map("equipment_loans")
+}
+
+model EquipmentLoanItem {
+  id              String   @id @default(uuid()) @db.Uuid
+  equipmentLoanId String   @map("equipment_loan_id") @db.Uuid
+  equipmentId     String   @map("equipment_id") @db.Uuid
+  quantity        Int      @default(1)
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  equipmentLoan EquipmentLoan @relation(fields: [equipmentLoanId], references: [id], onDelete: Cascade)
+  equipment     Equipment     @relation(fields: [equipmentId], references: [id], onDelete: Restrict)
+
+  @@index([equipmentLoanId])
+  @@index([equipmentId])
+  @@map("equipment_loan_items")
+}
+
+// ============================================================================
+// CONSUMABLES (HABIS PAKAI)
+// ============================================================================
+
+model Consumable {
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String
+  unit         String
+  stock        Int      @default(0)
+  minimumStock Int      @default(0) @map("minimum_stock")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  transactions ConsumableTransaction[]
+
+  @@map("consumables")
+}
+
+model ConsumableTransaction {
+  id           String                    @id @default(uuid()) @db.Uuid
+  consumableId String                    @map("consumable_id") @db.Uuid
+  userId       String                    @map("user_id") @db.Uuid
+  quantity     Int
+  type         ConsumableTransactionType
+  notes        String?                   @db.Text
+  createdAt    DateTime                  @default(now()) @map("created_at")
+
+  consumable Consumable @relation(fields: [consumableId], references: [id], onDelete: Restrict)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([consumableId])
+  @@index([userId])
+  @@index([type])
+  @@map("consumable_transactions")
+}
+
+// ============================================================================
+// CLEARANCE LETTERS (SURAT BEBAS LAB)
+// ============================================================================
+
+model ClearanceLetter {
+  id           String          @id @default(uuid()) @db.Uuid
+  userId       String          @map("user_id") @db.Uuid
+  status       ClearanceStatus @default(DRAFT)
+  approvedBy   String?         @map("approved_by") @db.Uuid
+  approvedAt   DateTime?       @map("approved_at")
+  documentPath String?         @map("document_path")
+  qrHash       String?         @unique @map("qr_hash")
+  notes        String?         @db.Text
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+
+  user     User  @relation("ClearanceOwner", fields: [userId], references: [id], onDelete: Restrict)
+  approver User? @relation("ClearanceApprover", fields: [approvedBy], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([approvedBy])
+  @@index([status])
+  @@map("clearance_letters")
+}
+
+// ============================================================================
+// DIGITAL SIGNATURES
+// ============================================================================
+
+model DigitalSignature {
+  id           String       @id @default(uuid()) @db.Uuid
+  documentId   String       @map("document_id") @db.Uuid
+  documentType DocumentType @map("document_type")
+  signerId     String       @map("signer_id") @db.Uuid
+  hash         String       @unique
+  createdAt    DateTime     @default(now()) @map("created_at")
+
+  signer User @relation(fields: [signerId], references: [id], onDelete: Restrict)
+
+  @@index([documentId])
+  @@index([documentType])
+  @@index([signerId])
+  @@map("digital_signatures")
+}
+
+// ============================================================================
+// ACTIVITY LOGS
+// ============================================================================
+
+model ActivityLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String?  @map("user_id") @db.Uuid
+  action    String
+  entity    String
+  entityId  String?  @map("entity_id")
+  metadata  Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([entity, entityId])
+  @@index([createdAt])
+  @@map("activity_logs")
+}
