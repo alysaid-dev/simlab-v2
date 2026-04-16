@@ -1,6 +1,14 @@
-import { Bell, User, Home, ChevronRight, Grid3x3, FileText, Clock } from "lucide-react";
-import { Link } from "react-router";
+import { User, Home, ChevronRight, LogOut } from "lucide-react";
+import { Link, useNavigate } from "react-router";
 import logoImage from "@/assets/logo-statistika.png";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
 
 interface PageLayoutProps {
   title: string;
@@ -14,6 +22,12 @@ interface PageLayoutProps {
 }
 
 export function PageLayout({ title, breadcrumbs, children, icon, sidebarItems = [], onSidebarItemClick, activeItem, hideHeader = false }: PageLayoutProps) {
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    navigate("/");
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -28,15 +42,21 @@ export function PageLayout({ title, breadcrumbs, children, icon, sidebarItems = 
               />
             </Link>
             <div className="flex items-center gap-4">
-              <button className="p-2 hover:bg-gray-100 rounded-full relative">
-                <Bell className="w-5 h-5 text-gray-700" />
-              </button>
-              <button className="p-2 hover:bg-gray-100 rounded-full">
-                <Grid3x3 className="w-5 h-5 text-gray-700" />
-              </button>
-              <button className="p-2 hover:bg-gray-100 rounded-full">
-                <User className="w-5 h-5 text-gray-700" />
-              </button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="p-2 hover:bg-gray-100 rounded-full">
+                    <User className="w-5 h-5 text-gray-700" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel>Muhammad Aly Sa`id</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleLogout}>
+                    <LogOut className="w-4 h-4" />
+                    Keluar
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </div>

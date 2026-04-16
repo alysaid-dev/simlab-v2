@@ -1,8 +1,24 @@
-import { Bell, Search, User } from "lucide-react";
+import { Search, User, LogOut } from "lucide-react";
+import { useNavigate } from "react-router";
 import logoImage from "@/assets/logo-statistika.png";
 import { DashboardCard } from "../components/DashboardCard";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "../components/ui/dropdown-menu";
 
 export default function Dashboard() {
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    // Mock logout — in production this would clear session/SSO tokens
+    navigate("/");
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -15,12 +31,21 @@ export default function Dashboard() {
               className="h-12"
             />
             <div className="flex items-center gap-4">
-              <button className="p-2 hover:bg-gray-100 rounded-full relative">
-                <Bell className="w-5 h-5 text-gray-700" />
-              </button>
-              <button className="p-2 hover:bg-gray-100 rounded-full">
-                <User className="w-5 h-5 text-gray-700" />
-              </button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="p-2 hover:bg-gray-100 rounded-full">
+                    <User className="w-5 h-5 text-gray-700" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel>Muhammad Aly Sa`id</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleLogout}>
+                    <LogOut className="w-4 h-4" />
+                    Keluar
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </div>

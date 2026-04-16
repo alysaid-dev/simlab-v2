@@ -47,7 +47,7 @@ export default function Login() {
           {/* Footer */}
           <div className="mt-8 text-center">
             <p className="text-sm text-gray-500">
-              © 2025 Laboratorium Statistika UII
+              © {new Date().getFullYear()} Laboratorium Statistika UII
             </p>
           </div>
         </div>

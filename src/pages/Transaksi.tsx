@@ -57,8 +57,22 @@ const mockStudentData = {
   }
 };
 
+// Active loan record
+interface ActiveLoan {
+  id: string;
+  nama: string;
+  jenis: string;
+  laptop: string;
+  batasKembali: Date;
+  whatsapp: string;
+  status: string;
+  denda: number;
+  kondisiPengembalian?: string;
+  catatanPengembalian?: string;
+}
+
 // Mock active loans data
-const mockActiveLoans = [
+const mockActiveLoans: ActiveLoan[] = [
   {
     id: "TRX-2026-001",
     nama: "Ahmad Rizki Maulana",
