@@ -493,7 +493,7 @@ export default function PeminjamanAlat() {
               </div>
 
               {/* Tool Grid */}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {filteredTools.map((tool) => (
                   <div
                     key={tool.id}
@@ -1454,7 +1454,7 @@ export default function PeminjamanAlat() {
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4 mb-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">ID Pengguna</label>
                       <input

@@ -34,11 +34,11 @@ export function PageLayout({ title, breadcrumbs, children, icon, sidebarItems = 
       <header className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
-            <Link to="/dashboard">
+            <Link to="/dashboard" className="flex-shrink-0 min-w-0">
               <img
                 src={logoImage}
                 alt="Laboratorium Statistika UII"
-                className="h-12"
+                className="h-9 md:h-12 w-auto max-w-full"
               />
             </Link>
             <div className="flex items-center gap-4">
@@ -65,7 +65,7 @@ export function PageLayout({ title, breadcrumbs, children, icon, sidebarItems = 
       {/* Breadcrumbs */}
       <div className="bg-white border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
-          <div className="flex items-center gap-2 text-sm">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
             <Link to="/dashboard" className="text-blue-600 hover:text-blue-800 flex items-center gap-1">
               <Home className="w-4 h-4" />
               Dashboard
@@ -87,18 +87,18 @@ export function PageLayout({ title, breadcrumbs, children, icon, sidebarItems = 
       </div>
 
       {/* Main Content with Sidebar */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex gap-6">
-          {/* Left Sidebar */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
+        <div className="flex flex-col md:flex-row gap-4 md:gap-6">
+          {/* Left Sidebar — stacks above content on mobile */}
           {sidebarItems.length > 0 && (
-            <aside className="w-64 flex-shrink-0">
+            <aside className="w-full md:w-64 md:flex-shrink-0">
               <div className="bg-white rounded-lg shadow-sm overflow-hidden">
                 <nav className="flex flex-col">
                   {sidebarItems.map((item, index) => (
                     <button
                       key={index}
                       onClick={() => onSidebarItemClick?.(item)}
-                      className={`flex items-center gap-3 px-6 py-4 transition-colors text-left ${
+                      className={`flex items-center gap-3 px-4 md:px-6 py-3 md:py-4 transition-colors text-left ${
                         activeItem === item
                           ? 'bg-blue-600 text-white'
                           : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
@@ -115,13 +115,13 @@ export function PageLayout({ title, breadcrumbs, children, icon, sidebarItems = 
           )}
 
           {/* Main Content */}
-          <div className="flex-1 bg-white rounded-lg shadow-sm">
+          <div className="flex-1 min-w-0 bg-white rounded-lg shadow-sm">
             {/* Page Header */}
             {!hideHeader && (
-              <div className="border-b px-6 py-4 flex items-center justify-between">
-                <h1 className="text-xl font-semibold text-gray-900">{title}</h1>
+              <div className="border-b px-4 md:px-6 py-3 md:py-4 flex items-center justify-between gap-3">
+                <h1 className="text-lg md:text-xl font-semibold text-gray-900">{title}</h1>
                 {icon && (
-                  <div className="bg-purple-500 p-4 rounded-lg">
+                  <div className="bg-purple-500 p-3 md:p-4 rounded-lg flex-shrink-0">
                     {icon}
                   </div>
                 )}
@@ -129,7 +129,7 @@ export function PageLayout({ title, breadcrumbs, children, icon, sidebarItems = 
             )}
 
             {/* Page Content */}
-            <div className="p-6">
+            <div className="p-4 md:p-6">
               {children}
             </div>
           </div>

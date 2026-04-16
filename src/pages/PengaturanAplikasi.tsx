@@ -917,7 +917,7 @@ export default function PengaturanAplikasi() {
                   value={newHolidayDate}
                   onChange={(e) => setNewHolidayDate(e.target.value)}
                   placeholder="Pilih tanggal hari libur"
-                  className="pl-10 w-[220px]"
+                  className="pl-10 w-full sm:w-[220px]"
                 />
               </div>
               <Input

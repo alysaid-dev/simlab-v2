@@ -364,9 +364,9 @@ export default function TransaksiHabisPakai() {
             </Card>
 
             {/* Step 2: POS-Style Item Selection */}
-            <div className="flex gap-6">
+            <div className="flex flex-col lg:flex-row gap-6">
               {/* Left Panel: Item Catalog (60%) */}
-              <div className="flex-[3]">
+              <div className="w-full lg:flex-[3] min-w-0">
                 <Card className="p-6">
                   <h3 className="text-lg font-semibold mb-4">2. Pilih Barang</h3>
                   
@@ -394,7 +394,7 @@ export default function TransaksiHabisPakai() {
                   <p className="text-xs text-gray-500 -mt-3 mb-4">Tekan Enter untuk menambahkan</p>
                   
                   {/* Item Grid */}
-                  <div className="grid grid-cols-3 gap-4 max-h-[600px] overflow-y-auto pr-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[600px] overflow-y-auto pr-2">
                     {filteredItems.map((item) => (
                       <div
                         key={item.id}
@@ -439,7 +439,7 @@ export default function TransaksiHabisPakai() {
               </div>
 
               {/* Right Panel: Keranjang (40%) */}
-              <div className="flex-[2]">
+              <div className="w-full lg:flex-[2] min-w-0">
                 <Card className="sticky top-6 border-l border-gray-200 h-fit max-h-[700px] flex flex-col">
                   {/* Panel Header */}
                   <div className="p-6 border-b">
@@ -634,7 +634,7 @@ export default function TransaksiHabisPakai() {
                 </DialogHeader>
                 {selectedTransaction && (
                   <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <p className="text-sm text-gray-600">Nama</p>
                         <p className="font-medium">{selectedTransaction.namaPengguna}</p>

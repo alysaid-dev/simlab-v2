@@ -202,16 +202,16 @@ export default function PeminjamanLaptop() {
       const selectedLaptop = formData.itemDipilih ? laptopSpecs[formData.itemDipilih] : null;
       
       return (
-        <form onSubmit={handleSubmit} className="max-w-3xl">
+        <form onSubmit={handleSubmit} className="w-full max-w-3xl">
           <div className="space-y-6">
-            {/* Item Dipilih - Two Column Layout */}
+            {/* Item Dipilih - Two Column Layout (stacks on mobile) */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Item Dipilih <span className="text-red-500">*</span>
               </label>
-              <div className="flex gap-4">
+              <div className="flex flex-col md:flex-row gap-3 md:gap-4">
                 {/* Left: Dropdown */}
-                <div className="w-[180px] flex-shrink-0">
+                <div className="w-full md:w-[180px] md:flex-shrink-0">
                   <select
                     name="itemDipilih"
                     value={formData.itemDipilih}

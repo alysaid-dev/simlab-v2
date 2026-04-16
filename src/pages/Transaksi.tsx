@@ -456,7 +456,7 @@ export default function Transaksi() {
                       {/* Student Info */}
                       <div>
                         <h3 className="font-semibold text-lg mb-3">Informasi Mahasiswa</h3>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div>
                             <p className="text-sm text-gray-600">Nama</p>
                             <p className="font-medium">{foundStudent.nama}</p>
@@ -518,7 +518,7 @@ export default function Transaksi() {
 
                       <div className="border-t pt-6">
                         <h3 className="font-semibold text-lg mb-3">Tanggal & Waktu Harus Kembali</h3>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div>
                             <Label htmlFor="returnDate">Tanggal</Label>
                             <div className="relative mt-1">
@@ -673,7 +673,7 @@ export default function Transaksi() {
 
                     <div>
                       <Label className="text-base font-medium">Tanggal & Waktu Harus Kembali</Label>
-                      <div className="grid grid-cols-2 gap-4 mt-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
                         <div className="relative">
                           <Input
                             type="date"
@@ -759,7 +759,7 @@ export default function Transaksi() {
           <div>
             <div className="mb-6">
               <h2 className="text-xl font-semibold mb-4">Ringkasan Peminjaman</h2>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <Card className="p-4 border-l-4 border-l-blue-600">
                   <p className="text-sm text-gray-600 mb-1">Total Aktif</p>
                   <p className="text-3xl font-bold text-blue-600">{totalAktif}</p>
@@ -871,7 +871,7 @@ export default function Transaksi() {
                     </div>
                     <div>
                       <Label className="text-sm font-medium text-gray-700 mb-2 block">Batas Kembali Baru</Label>
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="relative">
                           <Input
                             type="date"
