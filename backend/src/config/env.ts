@@ -24,18 +24,19 @@ export const env = {
       process.env.SHIBBOLETH_LOGOUT_RETURN ?? "http://localhost:5173/",
     devMock: parseBool(process.env.SHIBBOLETH_DEV_MOCK, false),
   },
-  mail: {
-    user: process.env.GMAIL_USER ?? "",
-    appPassword: process.env.GMAIL_APP_PASSWORD ?? "",
-    fromName: process.env.MAIL_FROM_NAME ?? "SIMLAB Laboratorium Statistika UII",
+  smtp: {
+    host: process.env.SMTP_HOST ?? "",
+    port: Number.parseInt(process.env.SMTP_PORT ?? "587", 10),
+    secure: parseBool(process.env.SMTP_SECURE, false),
+    user: process.env.SMTP_USER ?? "",
+    pass: process.env.SMTP_PASS ?? "",
+    from: process.env.SMTP_FROM ?? "labstatistika.uii@gmail.com",
+    fromName: process.env.SMTP_FROM_NAME ?? "Laboratorium Statistika UII",
   },
-  fonnte: {
-    token: process.env.FONNTE_TOKEN ?? "",
-  },
-  scheduler: {
-    enabled: parseBool(process.env.SCHEDULER_ENABLED, true),
-    timezone: process.env.SCHEDULER_TZ ?? "Asia/Jakarta",
-    reminderCron: process.env.SCHEDULER_REMINDER_CRON ?? "0 8 * * *",
+  whatsapp: {
+    // Fonnte-compatible: POST { target, message } to apiUrl with Authorization: <token>
+    apiUrl: process.env.WA_API_URL ?? "",
+    token: process.env.WA_API_TOKEN ?? "",
   },
 } as const;
 
