@@ -27,7 +27,8 @@
       "Bash(curl -s \"http://localhost:5173/src/styles/globals.css?direct\")",
       "Bash(npx tsc:*)",
       "Read(//f/SIMLABV2/**)",
-      "Bash(npx prisma:*)"
+      "Bash(npx prisma:*)",
+      "Bash(npm audit:*)"
     ]
   }
 }

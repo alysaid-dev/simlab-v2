@@ -24,6 +24,19 @@ export const env = {
       process.env.SHIBBOLETH_LOGOUT_RETURN ?? "http://localhost:5173/",
     devMock: parseBool(process.env.SHIBBOLETH_DEV_MOCK, false),
   },
+  mail: {
+    user: process.env.GMAIL_USER ?? "",
+    appPassword: process.env.GMAIL_APP_PASSWORD ?? "",
+    fromName: process.env.MAIL_FROM_NAME ?? "SIMLAB Laboratorium Statistika UII",
+  },
+  fonnte: {
+    token: process.env.FONNTE_TOKEN ?? "",
+  },
+  scheduler: {
+    enabled: parseBool(process.env.SCHEDULER_ENABLED, true),
+    timezone: process.env.SCHEDULER_TZ ?? "Asia/Jakarta",
+    reminderCron: process.env.SCHEDULER_REMINDER_CRON ?? "0 8 * * *",
+  },
 } as const;
 
 export const isDev = env.nodeEnv !== "production";

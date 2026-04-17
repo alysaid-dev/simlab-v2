@@ -8,6 +8,10 @@ import { disconnectPrisma } from "./config/database.js";
 import { shibbolethAttach } from "./middleware/auth.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 import apiRoutes from "./routes/index.js";
+import {
+  startScheduler,
+  stopScheduler,
+} from "./services/notification/scheduler.service.js";
 
 function createApp(): Express {
   const app = express();
@@ -85,8 +89,12 @@ async function main(): Promise<void> {
     }
   });
 
+  // Start cron jobs (H-1 loan reminder etc.) after HTTP is up
+  startScheduler();
+
   const shutdown = async (signal: string) => {
     console.log(`[simlab-v2] Received ${signal}, shutting down gracefully...`);
+    stopScheduler();
     server.close(async () => {
       await disconnectPrisma();
       process.exit(0);
