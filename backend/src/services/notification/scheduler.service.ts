@@ -2,7 +2,7 @@ import cron, { type ScheduledTask } from "node-cron";
 import { LoanStatus } from "@prisma/client";
 import { prisma } from "../../config/database.js";
 import { env } from "../../config/env.js";
-import { notifications } from "./index.js";
+import { notifyLoanReminderH2ToMahasiswa } from "./index.js";
 
 /**
  * Compute the [start, end) UTC window that represents "tomorrow" in the
@@ -74,20 +74,27 @@ export async function runH1ReminderJob(): Promise<ReminderRunResult> {
       continue;
     }
 
-    const result = await notifications.reminder(
-      {
-        email: loan.borrower.email,
-        phone: loan.borrower.waNumber,
-      },
-      {
-        recipientName: loan.borrower.displayName,
-        assetName: `${loan.asset.name} (${loan.asset.code})`,
-        dueDate: loan.endDate,
-      }
-    );
+    const endDate = loan.endDate;
+const tanggalJatuhTempo = new Intl.DateTimeFormat("id-ID", {
+  timeZone: "Asia/Jakarta",
+  dateStyle: "long",
+}).format(endDate);
 
-    if (result.email.ok || result.whatsapp.ok) sent++;
-    else failed++;
+const result = await notifyLoanReminderH2ToMahasiswa(
+  {
+    email: loan.borrower.email ?? undefined,
+    phone: loan.borrower.waNumber ?? undefined,
+  },
+  {
+    namaMahasiswa: loan.borrower.displayName,
+    kodeLaptop: loan.asset.code,
+    namaLaptop: loan.asset.name,
+    tanggalJatuhTempo,
+  }
+);
+
+if (result.email.status === "sent" || result.whatsapp.status === "sent") sent++;
+else failed++;
   }
 
   console.log(
