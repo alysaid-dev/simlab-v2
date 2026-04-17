@@ -5,38 +5,10 @@
  * which channel(s) to send. Content follows "Draft Isi Pesan SIMLAB V2".
  */
 
-import { readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
 export const SIMLAB_URL = 'https://statistics.uii.ac.id/simlab';
 export const LATE_FEE_PER_DAY = 'Rp25.000';
-
-const LOGO_HTTP_FALLBACK = 'https://statistics.uii.ac.id/simlab/assets/logo-statistika.png';
-
-/**
- * Logo embedded as a base64 data URL so emails render the header image even
- * when the recipient's client blocks external images. Loaded once at module
- * init from the frontend `src/assets/logo-statistika.png` (same path works
- * from both `tsx watch` source and compiled `dist/` output). Falls back to a
- * hosted URL if the file can't be read. Note: the PNG is ~320KB, so every
- * outgoing email carries ~428KB of inlined image data.
- */
-function loadLogoDataUrl(): string {
-  try {
-    const here = dirname(fileURLToPath(import.meta.url));
-    // backend/src/services/notification/ → ../../../../src/assets/...
-    const logoPath = resolve(here, '../../../../src/assets/logo-statistika.png');
-    const b64 = readFileSync(logoPath).toString('base64');
-    return `data:image/png;base64,${b64}`;
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.warn('[notification] Failed to load embedded logo, falling back to hosted URL:', err);
-    return LOGO_HTTP_FALLBACK;
-  }
-}
-
-export const LOGO_URL = loadLogoDataUrl();
+export const LOGO_URL =
+  'https://raw.githubusercontent.com/alysaid-dev/simlab-v2/main/src/assets/logo-statistika.png';
 
 export interface NotificationTemplate {
   subject: string;
