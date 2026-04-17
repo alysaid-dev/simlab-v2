@@ -38,6 +38,11 @@ export const env = {
     apiUrl: process.env.WA_API_URL ?? "",
     token: process.env.WA_API_TOKEN ?? "",
   },
+scheduler: {
+    enabled: parseBool(process.env.SCHEDULER_ENABLED, true),
+    timezone: process.env.SCHEDULER_TZ ?? "Asia/Jakarta",
+    reminderCron: process.env.SCHEDULER_REMINDER_CRON ?? "0 8 * * *",
+  },
 } as const;
 
 export const isDev = env.nodeEnv !== "production";

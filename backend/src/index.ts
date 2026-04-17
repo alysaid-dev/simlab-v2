@@ -13,6 +13,9 @@ import {
   stopScheduler,
 } from "./services/notification/scheduler.service.js";
 
+import { configureNotificationTransports } from "./services/notification/index.js";
+import { sendEmail, sendWhatsApp } from "./services/notification/transports.js";
+
 function createApp(): Express {
   const app = express();
 
@@ -90,7 +93,8 @@ async function main(): Promise<void> {
   });
 
   // Start cron jobs (H-1 loan reminder etc.) after HTTP is up
-  startScheduler();
+configureNotificationTransports({ sendEmail, sendWhatsApp });
+startScheduler();
 
   const shutdown = async (signal: string) => {
     console.log(`[simlab-v2] Received ${signal}, shutting down gracefully...`);
