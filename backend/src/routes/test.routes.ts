@@ -77,16 +77,16 @@ const DUMMY = {
 function buildDispatcher(
   template: TemplateName,
   recipient: notif.Recipient,
-): Promise<notif.DispatchResult> {
+): Promise<notif.ChannelResults> {
   switch (template) {
     case "loanApprovalToDosen":
-      return notif.notifyLoanApprovalRequestToDosen(recipient, {
+      return notif.notifyLoanApprovalToDosen(recipient, {
         dosenName: DUMMY.dosenName,
         namaMahasiswa: DUMMY.namaMahasiswa,
         nim: DUMMY.nim,
       });
     case "loanApprovalToKalab":
-      return notif.notifyLoanApprovalRequestToKalab(recipient, {
+      return notif.notifyLoanApprovalToKalab(recipient, {
         kalabName: DUMMY.kalabName,
         namaMahasiswa: DUMMY.namaMahasiswa,
         nim: DUMMY.nim,
