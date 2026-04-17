@@ -73,7 +73,7 @@ function emailLayout({ greeting, bodyHtml, linkSimlab, linkLabel }: EmailLayoutO
           </tr>
           <tr>
             <td style="background:#0f172a;padding:16px 32px;text-align:center;color:#cbd5e1;font-size:12px">
-              Laboratorium Statistika FMIPA UII, Universitas Islam Indonesia<br />
+              Laboratorium Statistika FMIPA Universitas Islam Indonesia<br />
               <span style="color:#64748b">Email ini dikirim otomatis oleh sistem SIMLAB. Mohon tidak membalas email ini.</span>
             </td>
           </tr>
@@ -105,8 +105,8 @@ function waDetails(rows: Array<[string, string]>): string {
   return rows.map(([k, v]) => `${k}: ${v}`).join('\n');
 }
 
-const WA_FOOTER = '\n\n_Laboratorium Statistika UII_';
-const WA_SALAM = 'Assalamualaikum warahmatullahi wabarakatuh 🙏';
+const WA_FOOTER = '\n\nHormat kami,\n*Laboratorium Statistika FMIPA*\nUniversitas Islam Indonesia';
+const WA_SALAM = '*SIMLAB Statistika UII*\n\n_Assalamualaikum warahmatullahi wabarakatuh_';
 
 // ---------------------------------------------------------------------------
 // 1. Dosen — permohonan persetujuan peminjaman laptop
@@ -135,7 +135,7 @@ export function loanApprovalRequestToDosen(p0: LoanApprovalToDosenParams): Notif
   });
   const whatsapp = `${WA_SALAM}
 
-📬 *Permohonan Persetujuan Peminjaman Laptop*
+*Permohonan Persetujuan Peminjaman Laptop*
 
 Yth. Bapak/Ibu ${p0.dosenName},
 Terdapat pengajuan peminjaman laptop oleh mahasiswa bimbingan Bapak/Ibu:
@@ -181,7 +181,7 @@ export function loanApprovalRequestToKalab(p0: LoanApprovalToKalabParams): Notif
   });
   const whatsapp = `${WA_SALAM}
 
-📬 *Notifikasi Pengajuan Peminjaman Laptop*
+*Notifikasi Pengajuan Peminjaman Laptop*
 
 Yth. Bapak/Ibu ${p0.kalabName},
 Pengajuan peminjaman laptop telah disetujui dosen pembimbing dan menunggu persetujuan Kepala Laboratorium.
@@ -228,7 +228,7 @@ export function roomReservationToKalab(p0: RoomReservationToKalabParams): Notifi
   });
   const whatsapp = `${WA_SALAM}
 
-🏫 *Permohonan Peminjaman Ruangan*
+*Permohonan Peminjaman Ruangan*
 
 Yth. Bapak/Ibu ${p0.kalabName},
 Permohonan peminjaman ruangan telah diverifikasi laboran dan menunggu persetujuan Kepala Lab.
@@ -276,7 +276,7 @@ export function clearanceLetterToKalab(p0: ClearanceLetterToKalabParams): Notifi
   });
   const whatsapp = `${WA_SALAM}
 
-📄 *Permohonan Surat Keterangan Bebas Lab*
+*Permohonan Surat Keterangan Bebas Lab*
 
 Yth. Bapak/Ibu ${p0.kalabName},
 Permohonan Surat Keterangan Bebas Laboratorium telah diperiksa laboran dan menunggu persetujuan Kepala Lab.
@@ -323,7 +323,7 @@ export function loanApprovedToLaboran(p0: LoanApprovedToLaboranParams): Notifica
   });
   const whatsapp = `${WA_SALAM}
 
-💻 *Peminjaman Laptop Disetujui*
+*Peminjaman Laptop Disetujui*
 
 Yth. Bapak/Ibu ${p0.laboranName},
 Peminjaman laptop berikut telah disetujui Kepala Lab dan perlu segera ditindaklanjuti.
@@ -375,7 +375,7 @@ export function roomReservationToLaboran(p0: RoomReservationToLaboranParams): No
   });
   const whatsapp = `${WA_SALAM}
 
-🏫 *Pengajuan Peminjaman Ruangan Baru*
+*Pengajuan Peminjaman Ruangan Baru*
 
 Yth. Bapak/Ibu ${p0.laboranName},
 Terdapat pengajuan peminjaman ruangan baru yang memerlukan pemeriksaan.
@@ -424,7 +424,7 @@ export function clearanceLetterToLaboran(p0: ClearanceLetterToLaboranParams): No
   });
   const whatsapp = `${WA_SALAM}
 
-📄 *Permohonan Surat Keterangan Bebas Lab Baru*
+*Permohonan Surat Keterangan Bebas Lab Baru*
 
 Yth. Bapak/Ibu ${p0.laboranName},
 Terdapat permohonan baru yang memerlukan pemeriksaan tanggungan (peralatan, denda, administrasi).
@@ -468,7 +468,7 @@ export function loanCreatedToMahasiswa(p0: LoanCreatedToMahasiswaParams): Notifi
   });
   const whatsapp = `${WA_SALAM}
 
-💻 *Permohonan Peminjaman Laptop Dibuat*
+*Permohonan Peminjaman Laptop Dibuat*
 
 Yth. ${p0.namaMahasiswa},
 Permohonan peminjaman laptop Anda berhasil dibuat dan menunggu persetujuan dosen pembimbing.
@@ -514,7 +514,7 @@ export function loanApprovedByDosenToMahasiswa(p0: LoanApprovedByDosenParams): N
   });
   const whatsapp = `${WA_SALAM}
 
-✅ *Disetujui Dosen Pembimbing*
+*Disetujui Dosen Pembimbing*
 
 Yth. ${p0.namaMahasiswa},
 Permohonan peminjaman laptop Anda telah disetujui dosen pembimbing.
@@ -564,7 +564,7 @@ export function loanApprovedByKalabToMahasiswa(p0: LoanApprovedByKalabParams): N
   });
   const whatsapp = `${WA_SALAM}
 
-🎉 *Peminjaman Laptop Disetujui*
+*Peminjaman Laptop Disetujui - Silakan Hubungi Laboran*
 
 Yth. ${p0.namaMahasiswa},
 Permohonan peminjaman laptop Anda telah disetujui Kepala Lab.
@@ -612,7 +612,7 @@ export function clearanceCreatedToMahasiswa(p0: ClearanceCreatedToMahasiswaParam
   });
   const whatsapp = `${WA_SALAM}
 
-📄 *Permohonan Surat Bebas Lab Dibuat*
+*Permohonan Surat Bebas Lab Dibuat*
 
 Yth. ${p0.namaMahasiswa},
 Permohonan Surat Keterangan Bebas Laboratorium Anda berhasil dibuat.
@@ -659,7 +659,7 @@ export function clearanceCheckedToMahasiswa(p0: ClearanceCheckedToMahasiswaParam
   });
   const whatsapp = `${WA_SALAM}
 
-🔍 *Surat Bebas Lab Telah Diperiksa*
+*Surat Bebas Lab Telah Diperiksa*
 
 Yth. ${p0.namaMahasiswa},
 Permohonan Anda telah selesai diperiksa laboran.
@@ -717,7 +717,7 @@ export function clearanceIssuedToMahasiswa(p0: ClearanceIssuedToMahasiswaParams)
   });
   const whatsapp = `${WA_SALAM}
 
-📜 *Surat Bebas Lab Telah Diterbitkan*
+*Surat Bebas Lab Telah Diterbitkan*
 
 Yth. ${p0.namaMahasiswa},
 Surat Keterangan Bebas Laboratorium Anda telah resmi diterbitkan.
@@ -767,7 +767,7 @@ export function loanReminderH2ToMahasiswa(p0: LoanReminderH2Params): Notificatio
   });
   const whatsapp = `${WA_SALAM}
 
-⏰ *Pengingat: Peminjaman Jatuh Tempo*
+*Pengingat: Peminjaman Jatuh Tempo*
 
 Yth. ${p0.namaMahasiswa},
 Peminjaman laptop Anda akan *jatuh tempo dalam 2 hari* pada ${p0.tanggalJatuhTempo}.
@@ -812,7 +812,7 @@ export function loanOverdueToMahasiswa(p0: LoanOverdueParams): NotificationTempl
   });
   const whatsapp = `${WA_SALAM}
 
-🚨 *Peminjaman Laptop Terlambat*
+*Peminjaman Laptop Terlambat*
 
 Yth. ${p0.namaMahasiswa},
 Peminjaman laptop Anda telah *melewati batas tanggal pengembalian*.
