@@ -30,10 +30,10 @@ interface EmailLayoutOpts {
 function emailLayout({ greeting, bodyHtml, linkSimlab, linkLabel }: EmailLayoutOpts): string {
   const button = linkSimlab
     ? `<p style="margin:24px 0;text-align:center">
-         <a href="${linkSimlab}" style="display:inline-block;padding:12px 28px;background:linear-gradient(135deg,#003087 0%,#1e5bb8 60%,#FFB800 100%);color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px">${linkLabel ?? 'Buka SIMLAB'}</a>
+         <a href="${linkSimlab}" style="display:inline-block;padding:12px 28px;background:linear-gradient(135deg,#7c3aed 0%,#2563eb 50%,#06b6d4 100%);color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px">${linkLabel ?? 'Buka SIMLAB'}</a>
        </p>
        <p style="margin:8px 0;font-size:13px;color:#475569;word-break:break-all;text-align:center">
-         <a href="${linkSimlab}" style="color:#003087;text-decoration:underline">${linkSimlab}</a>
+         <a href="${linkSimlab}" style="color:#2563eb;text-decoration:underline">${linkSimlab}</a>
        </p>`
     : '';
 
@@ -50,9 +50,12 @@ function emailLayout({ greeting, bodyHtml, linkSimlab, linkLabel }: EmailLayoutO
       <td align="center">
         <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 12px rgba(15,23,42,0.08)">
           <tr>
-            <td align="center" style="background:linear-gradient(135deg,#003087 0%,#0a4ea6 55%,#FFB800 100%);padding:28px 32px;border-bottom:3px solid #FFB800">
+            <td align="center" style="background:#DBEAFE;padding:28px 32px;border-bottom:3px solid #FFB800">
               <img src="${LOGO_URL}" alt="Laboratorium Statistika UII" height="72" style="display:block;margin:0 auto;height:72px;width:auto;border:0" />
             </td>
+          </tr>
+          <tr>
+            <td style="height:2px;background:#003087;line-height:2px;font-size:0">&nbsp;</td>
           </tr>
           <tr>
             <td style="padding:32px">
@@ -63,7 +66,7 @@ function emailLayout({ greeting, bodyHtml, linkSimlab, linkLabel }: EmailLayoutO
               <p style="margin:24px 0 0;font-style:italic;color:#334155">Wassalamualaikum warahmatullahi wabarakatuh</p>
               <p style="margin:16px 0 0;font-size:14px;color:#0f172a">
                 Hormat kami,<br />
-                <strong>Laboratorium Statistika FMIPA UII</strong><br />
+                <strong>Laboratorium Statistika FMIPA</strong><br />
                 Universitas Islam Indonesia
               </p>
             </td>
