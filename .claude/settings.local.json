@@ -25,7 +25,9 @@
       "Bash(curl -s -o /dev/null -w '%{http_code}' http://localhost:5173/src/pages/__TRACKED_VAR__)",
       "mcp__Claude_Preview__preview_start",
       "Bash(curl -s \"http://localhost:5173/src/styles/globals.css?direct\")",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Read(//f/SIMLABV2/**)",
+      "Bash(npx prisma:*)"
     ]
   }
 }
