@@ -30,10 +30,10 @@ interface EmailLayoutOpts {
 function emailLayout({ greeting, bodyHtml, linkSimlab, linkLabel }: EmailLayoutOpts): string {
   const button = linkSimlab
     ? `<p style="margin:24px 0;text-align:center">
-         <a href="${linkSimlab}" style="display:inline-block;padding:12px 28px;background:linear-gradient(135deg,#7c3aed 0%,#2563eb 50%,#06b6d4 100%);color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px">${linkLabel ?? 'Buka SIMLAB'}</a>
+         <a href="${linkSimlab}" style="display:inline-block;padding:12px 28px;background:linear-gradient(135deg,#003087 0%,#1e5bb8 60%,#FFB800 100%);color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px">${linkLabel ?? 'Buka SIMLAB'}</a>
        </p>
        <p style="margin:8px 0;font-size:13px;color:#475569;word-break:break-all;text-align:center">
-         <a href="${linkSimlab}" style="color:#2563eb;text-decoration:underline">${linkSimlab}</a>
+         <a href="${linkSimlab}" style="color:#003087;text-decoration:underline">${linkSimlab}</a>
        </p>`
     : '';
 
@@ -50,18 +50,8 @@ function emailLayout({ greeting, bodyHtml, linkSimlab, linkLabel }: EmailLayoutO
       <td align="center">
         <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 12px rgba(15,23,42,0.08)">
           <tr>
-            <td style="background:linear-gradient(135deg,#7c3aed 0%,#2563eb 50%,#06b6d4 100%);padding:24px 32px">
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-                <tr>
-                  <td style="vertical-align:middle">
-                    <img src="${LOGO_URL}" alt="Laboratorium Statistika UII" height="56" style="display:block;height:56px;width:auto;border:0" />
-                  </td>
-                  <td style="vertical-align:middle;text-align:right;color:#ffffff">
-                    <div style="font-size:18px;font-weight:700;letter-spacing:0.5px">LABORATORIUM</div>
-                    <div style="font-size:18px;font-weight:700;letter-spacing:0.5px">STATISTIKA</div>
-                  </td>
-                </tr>
-              </table>
+            <td align="center" style="background:linear-gradient(135deg,#003087 0%,#0a4ea6 55%,#FFB800 100%);padding:28px 32px;border-bottom:3px solid #FFB800">
+              <img src="${LOGO_URL}" alt="Laboratorium Statistika UII" height="72" style="display:block;margin:0 auto;height:72px;width:auto;border:0" />
             </td>
           </tr>
           <tr>
