@@ -1,3 +1,4 @@
+import { RoleName } from "@prisma/client";
 import { z } from "zod";
 import { usersService } from "../services/users.service.js";
 import { hasRoleAtLeast } from "../middleware/auth.js";
@@ -8,12 +9,20 @@ const listQuery = z.object({
   skip: z.coerce.number().int().min(0).optional(),
   take: z.coerce.number().int().min(1).max(200).optional(),
   search: z.string().trim().min(1).optional(),
+  role: z.nativeEnum(RoleName).optional(),
 });
 
 export const usersController = {
-  // Route guard restricts this to LABORAN and above.
+  // Akses: LABORAN+ untuk list bebas; user biasa hanya boleh ?role=DOSEN
+  // (untuk dropdown dosen pembimbing di form peminjaman laptop).
   list: asyncHandler(async (req, res) => {
     const q = listQuery.parse(req.query);
+    if (q.role !== RoleName.DOSEN && !hasRoleAtLeast(req.user!, "LABORAN")) {
+      throw new HttpError(
+        403,
+        "Akses ditolak. Dibutuhkan peran minimum: LABORAN",
+      );
+    }
     const result = await usersService.list(q);
     res.json(result);
   }),

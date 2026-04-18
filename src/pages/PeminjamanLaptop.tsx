@@ -306,29 +306,45 @@ export default function PeminjamanLaptop() {
       cancelled = true;
     };
   }, [currentView, user?.dbUser?.id]);
-  const dosenOptions = [
-    "Achmad Fauzan, S.Pd., M.Si.",
-    "Akhmad Fauzy, Prof., S.Si., M.Si., Ph.D.",
-    "Arum Handini Primandari, S.Pd.Si., M.Sc.",
-    "Dr. Asyharul Mu'ala, S.H.I., M.H.I.",
-    "Atina Ahdika, Dr. S.Si., M.Si.",
-    "Ayundyah Kesumawati, S.Si., M.Si.",
-    "Dina Tri Utari, S.Si., M.Sc.",
-    "Edy Widodo, Dr., S.Si., M.Si.",
-    "Jaka Nugraha, Prof., Dr., S.Si., M.Si.",
-    "Kariyam, Dr., S.Si., M.Si.",
-    "Muhammad Hasan Sidiq Kurniawan, S.Si., M.Sc.",
-    "Muhammad Muhajir, S.Si., M.Sc.",
-    "Mujiati Dwi Kartikasari., S.Si., M.Sc.",
-    "Raden Bagus Fajriya Hakim, Dr., S.Si., M.Si.",
-    "Rahmadi Yotenka, S.Si., M.Sc.",
-    "Rohmatul Fajriyah, Dr.techn., S.Si., M.Si.",
-    "Sekti Kartika Dini, S.Si., M.Si.",
-    "Tuti Purwaningsih, S.Stat., M.Si.",
-    "Purnama Akbar, S.Stat., M.Si.",
-    "Abdullah Ahmad Dzikrullah, S.Si., M.Sc.",
-    "Ghiffari Ahnaf Danarwindu, M.Sc.",
-  ];
+  // Daftar dosen — diambil dari /api/users?role=DOSEN (diseed dari
+  // data dosen Lab Statistika). Endpoint ini terbuka untuk semua user
+  // ter-autentikasi, khusus kalau filter role=DOSEN.
+  interface DosenOption {
+    id: string;
+    displayName: string;
+  }
+  const [dosenList, setDosenList] = useState<DosenOption[]>([]);
+  const [dosenLoading, setDosenLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setDosenLoading(true);
+    fetch(`${API_BASE}/api/users?role=DOSEN&take=200`, {
+      credentials: "include",
+    })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return (await r.json()) as {
+          items: Array<{ id: string; displayName: string }>;
+        };
+      })
+      .then((data) => {
+        if (!cancelled) {
+          setDosenList(
+            data.items.map((u) => ({ id: u.id, displayName: u.displayName })),
+          );
+        }
+      })
+      .catch((err) => {
+        console.error("[dosenList]", err);
+      })
+      .finally(() => {
+        if (!cancelled) setDosenLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -514,12 +530,15 @@ export default function PeminjamanLaptop() {
                 value={formData.dosenPembimbing}
                 onChange={handleInputChange}
                 required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                disabled={dosenLoading}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
               >
-                <option value="">Pilih Dosen Pembimbing</option>
-                {dosenOptions.map((dosen) => (
-                  <option key={dosen} value={dosen}>
-                    {dosen}
+                <option value="">
+                  {dosenLoading ? "Memuat daftar dosen..." : "Pilih Dosen Pembimbing"}
+                </option>
+                {dosenList.map((dosen) => (
+                  <option key={dosen.id} value={dosen.id}>
+                    {dosen.displayName}
                   </option>
                 ))}
               </select>

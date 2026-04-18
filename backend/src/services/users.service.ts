@@ -1,4 +1,4 @@
-import { EquipmentLoanStatus, LoanStatus } from "@prisma/client";
+import { EquipmentLoanStatus, LoanStatus, Prisma, RoleName } from "@prisma/client";
 import { prisma } from "../config/database.js";
 import { HttpError } from "../middleware/errorHandler.js";
 import type { ShibbolethUser } from "../middleware/auth.js";
@@ -59,23 +59,35 @@ export const usersService = {
     });
   },
 
-  async list(params: { skip?: number; take?: number; search?: string } = {}) {
-    const { skip = 0, take = 50, search } = params;
-    const where = search
-      ? {
-          OR: [
-            { email: { contains: search, mode: "insensitive" as const } },
-            { displayName: { contains: search, mode: "insensitive" as const } },
-            { uid: { contains: search, mode: "insensitive" as const } },
-          ],
-        }
-      : {};
+  async list(
+    params: {
+      skip?: number;
+      take?: number;
+      search?: string;
+      role?: RoleName;
+    } = {},
+  ) {
+    const { skip = 0, take = 50, search, role } = params;
+    const where: Prisma.UserWhereInput = {
+      ...(search
+        ? {
+            OR: [
+              { email: { contains: search, mode: "insensitive" } },
+              { displayName: { contains: search, mode: "insensitive" } },
+              { uid: { contains: search, mode: "insensitive" } },
+            ],
+          }
+        : {}),
+      ...(role
+        ? { roles: { some: { role: { name: role } } } }
+        : {}),
+    };
     const [items, total] = await Promise.all([
       prisma.user.findMany({
         where,
         skip,
         take,
-        orderBy: { createdAt: "desc" },
+        orderBy: { displayName: "asc" },
         include: { roles: { include: { role: true } } },
       }),
       prisma.user.count({ where }),
