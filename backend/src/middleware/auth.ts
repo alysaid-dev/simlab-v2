@@ -86,6 +86,10 @@ function extractCN(value: string): string {
  * Derive the set of Roles a user holds by exact-matching their group CNs and
  * affiliation values against ROLE_MAP. Empty set means the user has no
  * recognized role (typical for mahasiswa).
+ *
+ * As a bootstrap, any UID listed in `env.shibboleth.superAdminUids` is
+ * elevated to SUPER_ADMIN regardless of IdP attributes — this gives the
+ * first admin a way in before a role-management UI exists.
  */
 export function deriveRoles(user: ShibbolethUser): Set<Role> {
   const roles = new Set<Role>();
@@ -97,6 +101,9 @@ export function deriveRoles(user: ShibbolethUser): Set<Role> {
   for (const a of user.affiliation) {
     const role = ROLE_MAP[a.toLowerCase().trim()];
     if (role) roles.add(role);
+  }
+  if (env.shibboleth.superAdminUids.includes(user.uid)) {
+    roles.add("SUPER_ADMIN");
   }
   return roles;
 }

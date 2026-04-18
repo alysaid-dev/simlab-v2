@@ -310,9 +310,6 @@ export default function Akun() {
   const [formNama, setFormNama] = useState("");
   const [formEmail, setFormEmail] = useState("");
   const [formPeran, setFormPeran] = useState<Peran>("Admin");
-  const [formPassword, setFormPassword] = useState("");
-  const [formResetPassword, setFormResetPassword] = useState(false);
-  
   // Import Akun state
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [importData, setImportData] = useState<ImportRow[]>([]);
@@ -359,7 +356,6 @@ export default function Akun() {
     setFormNama("");
     setFormEmail("");
     setFormPeran("Admin");
-    setFormPassword("");
     setAddModalOpen(true);
   };
 
@@ -382,7 +378,6 @@ export default function Akun() {
     setFormNama(account.nama);
     setFormEmail(account.email);
     setFormPeran(account.peran);
-    setFormResetPassword(false);
     setEditModalOpen(true);
   };
 
@@ -697,27 +692,14 @@ export default function Akun() {
                     </Select>
                   </div>
                   
-                  <div>
-                    <Label htmlFor="password">Password Awal</Label>
-                    <Input
-                      id="password"
-                      type="password"
-                      value={formPassword}
-                      onChange={(e) => setFormPassword(e.target.value)}
-                      placeholder="Password"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Pengguna disarankan mengganti password setelah login pertama.
-                    </p>
-                  </div>
                 </div>
                 <DialogFooter>
                   <Button variant="outline" onClick={() => setAddModalOpen(false)}>
                     Batal
                   </Button>
-                  <Button 
+                  <Button
                     onClick={handleSaveNewAccount}
-                    disabled={!formId || !formNama || !formEmail || !formPassword}
+                    disabled={!formId || !formNama || !formEmail}
                   >
                     Simpan
                   </Button>
@@ -780,16 +762,6 @@ export default function Akun() {
                     </Select>
                   </div>
                   
-                  <div className="flex items-center space-x-2">
-                    <Checkbox 
-                      id="reset-password"
-                      checked={formResetPassword}
-                      onCheckedChange={(checked) => setFormResetPassword(checked as boolean)}
-                    />
-                    <Label htmlFor="reset-password" className="text-sm font-normal cursor-pointer">
-                      Reset Password
-                    </Label>
-                  </div>
                 </div>
                 <DialogFooter>
                   <Button variant="outline" onClick={() => setEditModalOpen(false)}>

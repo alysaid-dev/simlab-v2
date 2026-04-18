@@ -31,6 +31,10 @@ export const env = {
       process.env.SHIBBOLETH_SESSION_CACHE_TTL_MS ?? "60000",
       10,
     ),
+    // Bootstrap admins: UIDs (Shibboleth `uid` attr) yang otomatis
+    // dielevasi ke SUPER_ADMIN. Dipakai untuk seed admin pertama sebelum
+    // UI role management aktif. Comma-separated.
+    superAdminUids: parseList(process.env.SHIBBOLETH_SUPER_ADMIN_UIDS, []),
   },
   smtp: {
     host: process.env.SMTP_HOST ?? "",
