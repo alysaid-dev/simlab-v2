@@ -1,8 +1,45 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PageLayout } from "../components/PageLayout";
-import { FileCheck, Download } from "lucide-react";
+import { FileCheck, Download, AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
 
 type View = "pengajuan" | "riwayat";
+
+interface ObligationLoan {
+  id: string;
+  assetName: string;
+  status: string;
+  endDate: string;
+}
+
+interface ObligationEquipmentLoan {
+  id: string;
+  status: string;
+  createdAt: string;
+}
+
+interface ObligationsResponse {
+  hasObligations: boolean;
+  details: {
+    loans: ObligationLoan[];
+    equipmentLoans: ObligationEquipmentLoan[];
+  };
+  message: string;
+}
+
+const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
+
+function formatDate(iso: string): string {
+  if (!iso) return "-";
+  try {
+    return new Date(iso).toLocaleDateString("id-ID", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+  } catch {
+    return iso;
+  }
+}
 
 interface SuratRecord {
   tanggalPengajuan: string;
@@ -20,6 +57,44 @@ export default function SuratBebasLab() {
     email: "151002233@uii.ac.id",
     tanggalSidang: "",
   });
+
+  // Obligations gate — user tidak boleh mengajukan surat bebas lab
+  // selama masih punya peminjaman aktif.
+  const [obligations, setObligations] = useState<ObligationsResponse | null>(null);
+  const [obligationsLoading, setObligationsLoading] = useState(false);
+  const [obligationsError, setObligationsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (currentView !== "pengajuan") return;
+    let cancelled = false;
+    setObligationsLoading(true);
+    setObligationsError(null);
+    fetch(`${API_BASE}/api/users/me/obligations`, {
+      credentials: "include",
+    })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return (await r.json()) as ObligationsResponse;
+      })
+      .then((data) => {
+        if (!cancelled) setObligations(data);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setObligationsError(
+            err instanceof Error
+              ? err.message
+              : "Gagal memuat data tanggungan"
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setObligationsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentView]);
 
   // Mock data for history
   const riwayatData: SuratRecord[] = [
@@ -73,9 +148,106 @@ export default function SuratBebasLab() {
 
   const renderContent = () => {
     if (currentView === "pengajuan") {
+      const isBlocked = obligations?.hasObligations === true;
+      const isReady = obligations !== null && !obligations.hasObligations;
+
       return (
         <form onSubmit={handleSubmit} className="max-w-3xl">
           <div className="space-y-6">
+            {obligationsLoading && (
+              <div className="flex items-center gap-3 p-4 rounded-lg bg-gray-50 border border-gray-200 text-gray-700">
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span>Memeriksa tanggungan aktif…</span>
+              </div>
+            )}
+
+            {obligationsError && (
+              <div className="flex items-start gap-3 p-4 rounded-lg bg-red-50 border border-red-200 text-red-800">
+                <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-medium">Gagal memuat data tanggungan</p>
+                  <p className="text-sm">{obligationsError}</p>
+                </div>
+              </div>
+            )}
+
+            {isBlocked && obligations && (
+              <div className="p-4 rounded-lg bg-red-50 border border-red-300">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5 text-red-600" />
+                  <div className="flex-1">
+                    <p className="font-semibold text-red-900">
+                      Anda masih memiliki tanggungan aktif yang belum diselesaikan
+                    </p>
+                    <p className="text-sm text-red-800 mt-1">
+                      {obligations.message}
+                    </p>
+                  </div>
+                </div>
+
+                {obligations.details.loans.length > 0 && (
+                  <div className="mt-4">
+                    <p className="text-sm font-semibold text-red-900 mb-2">
+                      Peminjaman Laptop
+                    </p>
+                    <ul className="space-y-1 text-sm text-red-800">
+                      {obligations.details.loans.map((l) => (
+                        <li
+                          key={l.id}
+                          className="flex flex-wrap gap-2 items-center"
+                        >
+                          <span className="font-medium">{l.assetName}</span>
+                          <span className="inline-flex px-2 py-0.5 rounded-full bg-red-100 text-red-800 text-xs">
+                            {l.status}
+                          </span>
+                          <span className="text-red-700">
+                            jatuh tempo {formatDate(l.endDate)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {obligations.details.equipmentLoans.length > 0 && (
+                  <div className="mt-4">
+                    <p className="text-sm font-semibold text-red-900 mb-2">
+                      Peminjaman Peralatan
+                    </p>
+                    <ul className="space-y-1 text-sm text-red-800">
+                      {obligations.details.equipmentLoans.map((el) => (
+                        <li
+                          key={el.id}
+                          className="flex flex-wrap gap-2 items-center"
+                        >
+                          <span className="font-medium">#{el.id.slice(0, 8)}</span>
+                          <span className="inline-flex px-2 py-0.5 rounded-full bg-red-100 text-red-800 text-xs">
+                            {el.status}
+                          </span>
+                          <span className="text-red-700">
+                            diajukan {formatDate(el.createdAt)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {isReady && (
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-green-50 border border-green-200 text-green-800">
+                <CheckCircle2 className="w-5 h-5" />
+                <span className="text-sm font-medium">
+                  Tidak ada tanggungan aktif
+                </span>
+              </div>
+            )}
+
+            <fieldset
+              disabled={isBlocked}
+              className="space-y-6 m-0 p-0 border-0 min-w-0 disabled:opacity-60"
+            >
             {/* Nama (Prefilled) */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -139,15 +311,20 @@ export default function SuratBebasLab() {
               />
             </div>
 
-            {/* Submit Button */}
-            <div className="pt-4">
-              <button
-                type="submit"
-                className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors font-medium"
-              >
-                Submit Pengajuan
-              </button>
-            </div>
+            </fieldset>
+
+            {/* Submit Button — disembunyikan kalau user punya tanggungan. */}
+            {!isBlocked && (
+              <div className="pt-4">
+                <button
+                  type="submit"
+                  disabled={obligationsLoading || !!obligationsError}
+                  className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  Submit Pengajuan
+                </button>
+              </div>
+            )}
           </div>
         </form>
       );
