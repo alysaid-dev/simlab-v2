@@ -142,6 +142,10 @@ export const loansController = {
   updateStatus: asyncHandler(async (req, res) => {
     const { status } = statusBody.parse(req.body);
     const actor = await usersService.getByUid(req.user!.uid);
+    // Ambil status SEBELUM update — dipakai buat tentukan siapa yang
+    // bertindak saat REJECTED (dosen vs kalab). Tidak pakai role caller
+    // karena user bisa punya multi-role (mis. laboran+super_admin).
+    const previous = await loansService.getById(req.params.id!);
     const loan = await loansService.updateStatus(req.params.id!, status);
 
     const mahasiswaRecipient = {
@@ -192,10 +196,13 @@ export const loansController = {
         );
       }
     } else if (status === LoanStatus.REJECTED) {
-      // Penolakan — pakai role caller untuk menentukan template. Kalab
-      // (atau lebih tinggi) pakai template "ditolak kalab"; selain itu
-      // (biasanya DOSEN) pakai template "ditolak dosen".
-      const rejectedByKalab = hasRoleAtLeast(req.user!, "KEPALA_LAB");
+      // Penolakan — tentukan siapa yang nolak berdasarkan status SEBELUM
+      // update:
+      //   PENDING            → dosen yang nolak (baru masuk ke alur dosen)
+      //   APPROVED_BY_DOSEN  → kalab yang nolak (dosen sudah approve)
+      //   lainnya            → fallback ke dosen (rare edge)
+      const rejectedByKalab =
+        previous.status === LoanStatus.APPROVED_BY_DOSEN;
       const notifyFn = rejectedByKalab
         ? notifyLoanApprovedByKalabToMahasiswa
         : notifyLoanApprovedByDosenToMahasiswa;
