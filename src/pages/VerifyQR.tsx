@@ -234,19 +234,15 @@ export default function VerifyQR() {
       </div>
 
       <Alert className="mb-6 border-red-200 bg-red-50">
-        <div className="flex items-start gap-3">
-          <ShieldAlert className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
-          <div>
-            <AlertDescription className="text-red-900">
-              <p className="font-medium mb-2">Kemungkinan penyebab:</p>
-              <ul className="list-disc list-inside space-y-1 text-sm">
-                <li>QR code telah dimodifikasi atau dipalsukan</li>
-                <li>Dokumen tidak diterbitkan oleh sistem SIMLAB</li>
-                <li>QR code rusak atau tidak terbaca dengan benar</li>
-              </ul>
-            </AlertDescription>
-          </div>
-        </div>
+        <ShieldAlert className="text-red-600" />
+        <AlertDescription className="text-red-900">
+          <p className="font-medium mb-2">Kemungkinan penyebab:</p>
+          <ul className="list-disc list-inside space-y-1 text-sm">
+            <li>QR code telah dimodifikasi atau dipalsukan</li>
+            <li>Dokumen tidak diterbitkan oleh sistem SIMLAB</li>
+            <li>QR code rusak atau tidak terbaca dengan benar</li>
+          </ul>
+        </AlertDescription>
       </Alert>
 
       <div className="text-center">
@@ -254,10 +250,10 @@ export default function VerifyQR() {
           Hubungi Laboratorium Statistika FMIPA UII
         </p>
         <a
-          href="mailto:lab.statistika@uii.ac.id"
+          href="mailto:labstatistika@uii.ac.id"
           className="text-sm text-blue-600 hover:underline"
         >
-          lab.statistika@uii.ac.id
+          labstatistika@uii.ac.id
         </a>
       </div>
     </div>
