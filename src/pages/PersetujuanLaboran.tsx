@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { PageLayout } from "../components/PageLayout";
-import { ClipboardCheck, X } from "lucide-react";
+import { ClipboardCheck, X, Construction } from "lucide-react";
 
 type View = "peminjaman-ruangan" | "bebas-lab";
 
@@ -111,7 +111,31 @@ export default function PersetujuanLaboran() {
   };
 
   const renderContent = () => {
-    if (currentView === "peminjaman-ruangan") {
+    // Kedua menu (ruangan + bebas lab) belum terintegrasi backend.
+    if (
+      currentView === "peminjaman-ruangan" ||
+      currentView === "bebas-lab"
+    ) {
+      return (
+        <div className="max-w-xl mx-auto mt-12 text-center">
+          <div className="w-[120px] h-[120px] mx-auto bg-gradient-to-br from-gray-400 to-gray-500 rounded-xl flex items-center justify-center mb-4">
+            <Construction className="w-10 h-10 text-white" />
+          </div>
+          <h2 className="font-bold text-gray-900 text-xl mb-2">
+            Fitur Segera Hadir
+          </h2>
+          <p className="text-sm text-gray-500">
+            Modul persetujuan Laboran untuk{" "}
+            {currentView === "peminjaman-ruangan"
+              ? "peminjaman ruangan"
+              : "surat bebas lab"}{" "}
+            sedang dalam pengembangan backend.
+          </p>
+        </div>
+      );
+    }
+
+    if (false && currentView === "peminjaman-ruangan") {
       return (
         <>
           <div className="overflow-x-auto">

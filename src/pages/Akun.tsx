@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PageLayout } from "../components/PageLayout";
-import { Users, Search, Plus, Pencil, Trash2, Download, Upload, CheckCircle, XCircle, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import { Users, Search, Plus, Pencil, Trash2, Download, Upload, CheckCircle, XCircle, ChevronDown, ChevronUp, Loader2, AlertCircle } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -12,6 +12,81 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Checkbox } from "../components/ui/checkbox";
 
 type Peran = "Super Admin" | "Admin" | "Laboran" | "Dosen" | "Kepala Laboratorium";
+
+const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
+
+type BackendRoleName =
+  | "SUPER_ADMIN"
+  | "ADMIN"
+  | "KEPALA_LAB"
+  | "DOSEN"
+  | "LABORAN"
+  | "STAFF";
+
+interface BackendUser {
+  id: string;
+  uid: string;
+  email: string;
+  displayName: string;
+  isActive: boolean;
+  waNumber: string | null;
+  createdAt: string;
+  updatedAt: string;
+  roles: Array<{
+    userId: string;
+    roleId: string;
+    role: { id: string; name: BackendRoleName };
+  }>;
+}
+
+interface UserListResponse {
+  items: BackendUser[];
+  total: number;
+  skip: number;
+  take: number;
+}
+
+// Prioritize highest role for display — order matches ROLE_RANK in backend.
+const roleRank: Record<BackendRoleName, number> = {
+  SUPER_ADMIN: 6,
+  ADMIN: 5,
+  KEPALA_LAB: 4,
+  DOSEN: 3,
+  LABORAN: 2,
+  STAFF: 1,
+};
+
+const roleLabel: Record<BackendRoleName, Peran> = {
+  SUPER_ADMIN: "Super Admin",
+  ADMIN: "Admin",
+  KEPALA_LAB: "Kepala Laboratorium",
+  DOSEN: "Dosen",
+  LABORAN: "Laboran",
+  // Fallback — STAFF tidak punya label di UI sehingga di-display sebagai Admin.
+  STAFF: "Admin",
+};
+
+function pickTopRole(
+  roles: BackendUser["roles"],
+): Peran {
+  if (roles.length === 0) return "Admin";
+  const top = [...roles].sort(
+    (a, b) => roleRank[b.role.name] - roleRank[a.role.name],
+  )[0];
+  return roleLabel[top.role.name];
+}
+
+function formatDateShort(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString("id-ID", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  } catch {
+    return iso;
+  }
+}
 
 interface Account {
   id: string;
@@ -181,8 +256,47 @@ const defaultRoles: Role[] = [
 
 export default function Akun() {
   const [activeMenu, setActiveMenu] = useState<string>("");
-  const [accounts, setAccounts] = useState<Account[]>(mockAccounts);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [accountsLoading, setAccountsLoading] = useState(true);
+  const [accountsError, setAccountsError] = useState<string | null>(null);
   const [roles, setRoles] = useState<Role[]>(defaultRoles);
+
+  useEffect(() => {
+    let cancelled = false;
+    setAccountsLoading(true);
+    setAccountsError(null);
+    fetch(`${API_BASE}/api/users`, { credentials: "include" })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return (await r.json()) as UserListResponse;
+      })
+      .then((data) => {
+        if (cancelled) return;
+        setAccounts(
+          data.items.map((u) => ({
+            id: u.uid,
+            nama: u.displayName,
+            email: u.email,
+            peran: pickTopRole(u.roles),
+            status: u.isActive ? ("Aktif" as const) : ("Nonaktif" as const),
+            tanggalDibuat: formatDateShort(u.createdAt),
+          })),
+        );
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setAccountsError(
+            err instanceof Error ? err.message : "Gagal memuat daftar akun",
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setAccountsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   
   // Akun screen state
   const [searchQuery, setSearchQuery] = useState("");
@@ -382,10 +496,31 @@ export default function Akun() {
   };
 
   const renderContent = () => {
+    if (activeMenu === "Akun" && accountsLoading) {
+      return (
+        <Card className="p-12">
+          <div className="flex flex-col items-center justify-center text-gray-500 gap-3">
+            <Loader2 className="w-8 h-8 animate-spin" />
+            <p>Memuat daftar akun...</p>
+          </div>
+        </Card>
+      );
+    }
+    if (activeMenu === "Akun" && accountsError) {
+      return (
+        <Alert className="border-red-200 bg-red-50">
+          <AlertCircle className="h-4 w-4 text-red-600" />
+          <AlertDescription className="text-red-800">
+            Gagal memuat akun: {accountsError}
+          </AlertDescription>
+        </Alert>
+      );
+    }
+
     switch (activeMenu) {
       case "Akun":
         const filteredAccounts = getFilteredAccounts();
-        
+
         return (
           <div>
             {/* Toolbar */}

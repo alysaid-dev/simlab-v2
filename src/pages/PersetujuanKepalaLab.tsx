@@ -1,8 +1,51 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PageLayout } from "../components/PageLayout";
-import { Shield, X } from "lucide-react";
+import { Shield, X, Loader2, AlertTriangle, Construction } from "lucide-react";
 
 type View = "peminjaman-laptop" | "peminjaman-ruangan" | "bebas-lab";
+
+const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
+
+type BackendLoanStatus =
+  | "PENDING"
+  | "APPROVED"
+  | "REJECTED"
+  | "ACTIVE"
+  | "RETURNED"
+  | "OVERDUE"
+  | "CANCELLED";
+
+interface BackendLoan {
+  id: string;
+  status: BackendLoanStatus;
+  startDate: string;
+  endDate: string;
+  thesisTitle: string | null;
+  thesisAbstract: string | null;
+  notes: string | null;
+  createdAt: string;
+  borrower?: { id: string; displayName: string; uid: string; email?: string };
+  asset?: { id: string; name: string; code: string };
+}
+
+interface LoanListResponse {
+  items: BackendLoan[];
+  total: number;
+  skip: number;
+  take: number;
+}
+
+function formatDateFull(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString("id-ID", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+  } catch {
+    return iso;
+  }
+}
 
 interface PeminjamanLaptopRecord {
   tanggalPengajuan: string;
@@ -45,31 +88,51 @@ export default function PersetujuanKepalaLab() {
     keterangan: "",
   });
 
-  // Mock data for Peminjaman Laptop
-  const peminjamanLaptopData: PeminjamanLaptopRecord[] = [
-    {
-      tanggalPengajuan: "20 Januari 2025",
-      namaMahasiswa: "Anggit Wicaksono",
-      nim: "201001111",
-      email: "201001111@uii.ac.id",
-      judulTA: "Analisis Sentimen Media Sosial Menggunakan Machine Learning",
-      abstrak: "Penelitian ini bertujuan untuk menganalisis sentimen pada media sosial menggunakan teknik machine learning untuk memahami opini publik terhadap suatu topik...",
-      alasan: "Memerlukan laptop dengan spesifikasi tinggi untuk menjalankan model machine learning dan pengolahan data besar",
-      tanggalPinjam: "25 Januari 2025",
-      tanggalKembali: "25 Maret 2025",
-    },
-    {
-      tanggalPengajuan: "21 Januari 2025",
-      namaMahasiswa: "Aly Rahman",
-      nim: "201001112",
-      email: "201001112@uii.ac.id",
-      judulTA: "Prediksi Harga Saham Menggunakan LSTM",
-      abstrak: "Penelitian ini menggunakan Long Short-Term Memory (LSTM) untuk memprediksi harga saham berdasarkan data historis...",
-      alasan: "Membutuhkan laptop untuk proses training model deep learning dengan dataset besar",
-      tanggalPinjam: "26 Januari 2025",
-      tanggalKembali: "26 Maret 2025",
-    },
-  ];
+  // Peminjaman Laptop — fetched from /api/loans (PENDING only).
+  const [pendingLoans, setPendingLoans] = useState<BackendLoan[]>([]);
+  const [loansLoading, setLoansLoading] = useState(true);
+  const [loansError, setLoansError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoansLoading(true);
+    setLoansError(null);
+    fetch(`${API_BASE}/api/loans?status=PENDING`, { credentials: "include" })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return (await r.json()) as LoanListResponse;
+      })
+      .then((data) => {
+        if (!cancelled) setPendingLoans(data.items);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setLoansError(
+            err instanceof Error ? err.message : "Gagal memuat peminjaman",
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoansLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const peminjamanLaptopData: PeminjamanLaptopRecord[] = pendingLoans.map(
+    (l) => ({
+      tanggalPengajuan: formatDateFull(l.createdAt),
+      namaMahasiswa: l.borrower?.displayName ?? "-",
+      nim: l.borrower?.uid ?? "-",
+      email: l.borrower?.email ?? "-",
+      judulTA: l.thesisTitle ?? "-",
+      abstrak: l.thesisAbstract ?? "-",
+      alasan: l.notes ?? "-",
+      tanggalPinjam: formatDateFull(l.startDate),
+      tanggalKembali: formatDateFull(l.endDate),
+    }),
+  );
 
   // Mock data for Peminjaman Ruangan
   const peminjamanRuanganData: PeminjamanRuanganRecord[] = [
@@ -132,6 +195,50 @@ export default function PersetujuanKepalaLab() {
   };
 
   const renderContent = () => {
+    // Ruangan + Bebas Lab belum terintegrasi backend — tampilkan placeholder.
+    if (
+      currentView === "peminjaman-ruangan" ||
+      currentView === "bebas-lab"
+    ) {
+      return (
+        <div className="max-w-xl mx-auto mt-12 text-center">
+          <div className="w-[120px] h-[120px] mx-auto bg-gradient-to-br from-gray-400 to-gray-500 rounded-xl flex items-center justify-center mb-4">
+            <Construction className="w-10 h-10 text-white" />
+          </div>
+          <h2 className="font-bold text-gray-900 text-xl mb-2">
+            Fitur Segera Hadir
+          </h2>
+          <p className="text-sm text-gray-500">
+            Modul persetujuan untuk{" "}
+            {currentView === "peminjaman-ruangan"
+              ? "peminjaman ruangan"
+              : "surat bebas lab"}{" "}
+            sedang dalam pengembangan backend.
+          </p>
+        </div>
+      );
+    }
+
+    if (currentView === "peminjaman-laptop" && loansLoading) {
+      return (
+        <div className="flex items-center gap-3 p-4 rounded-lg bg-gray-50 border border-gray-200 text-gray-700">
+          <Loader2 className="w-5 h-5 animate-spin" />
+          <span>Memuat data peminjaman…</span>
+        </div>
+      );
+    }
+    if (currentView === "peminjaman-laptop" && loansError) {
+      return (
+        <div className="flex items-start gap-3 p-4 rounded-lg bg-red-50 border border-red-200 text-red-800">
+          <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="font-medium">Gagal memuat peminjaman</p>
+            <p className="text-sm">{loansError}</p>
+          </div>
+        </div>
+      );
+    }
+
     if (currentView === "peminjaman-laptop") {
       return (
         <>

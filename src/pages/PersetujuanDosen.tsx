@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PageLayout } from "../components/PageLayout";
-import { UserCheck, X } from "lucide-react";
+import { UserCheck, X, Loader2, AlertTriangle } from "lucide-react";
 
 type View = "permohonan-persetujuan" | "riwayat-persetujuan";
 
@@ -21,6 +21,64 @@ interface RiwayatRecord {
   keterangan: string;
 }
 
+const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
+
+type BackendLoanStatus =
+  | "PENDING"
+  | "APPROVED"
+  | "REJECTED"
+  | "ACTIVE"
+  | "RETURNED"
+  | "OVERDUE"
+  | "CANCELLED";
+
+interface BackendLoan {
+  id: string;
+  status: BackendLoanStatus;
+  thesisTitle: string | null;
+  thesisAbstract: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  borrower?: { id: string; displayName: string; uid: string };
+  asset?: { id: string; name: string; code: string };
+}
+
+interface LoanListResponse {
+  items: BackendLoan[];
+  total: number;
+  skip: number;
+  take: number;
+}
+
+function formatDateFull(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString("id-ID", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+function statusToTindakan(status: BackendLoanStatus): string {
+  switch (status) {
+    case "APPROVED":
+    case "ACTIVE":
+    case "RETURNED":
+    case "OVERDUE":
+      return "Disetujui";
+    case "REJECTED":
+      return "Ditolak";
+    case "CANCELLED":
+      return "Dibatalkan";
+    default:
+      return "-";
+  }
+}
+
 export default function PersetujuanDosen() {
   const [currentView, setCurrentView] = useState<View | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -31,58 +89,57 @@ export default function PersetujuanDosen() {
     keterangan: "",
   });
 
-  // Mock data for permohonan
-  const permohonanData: PermohonanRecord[] = [
-    {
-      tanggalPengajuan: "22 Januari 2025",
-      namaMahasiswa: "Anggit",
-      nim: "201001111",
-      judulTA: "Analisis Sentimen Media Sosial Menggunakan Machine Learning",
-      abstrak: "Penelitian ini bertujuan untuk menganalisis sentimen pada media sosial menggunakan teknik machine learning...",
-      alasan: "Memerlukan laptop dengan spesifikasi tinggi untuk menjalankan model machine learning",
-    },
-    {
-      tanggalPengajuan: "21 Januari 2025",
-      namaMahasiswa: "Aly",
-      nim: "201001112",
-      judulTA: "Prediksi Harga Saham Menggunakan LSTM",
-      abstrak: "Penelitian ini menggunakan Long Short-Term Memory (LSTM) untuk memprediksi harga saham...",
-      alasan: "Membutuhkan laptop untuk proses training model deep learning",
-    },
-    {
-      tanggalPengajuan: "20 Januari 2025",
-      namaMahasiswa: "Rizal",
-      nim: "201001113",
-      judulTA: "Sistem Rekomendasi Produk E-Commerce",
-      abstrak: "Penelitian ini mengembangkan sistem rekomendasi untuk platform e-commerce...",
-      alasan: "Diperlukan untuk pengolahan data besar dan implementasi algoritma rekomendasi",
-    },
-  ];
+  const [allLoans, setAllLoans] = useState<BackendLoan[]>([]);
+  const [loansLoading, setLoansLoading] = useState(true);
+  const [loansError, setLoansError] = useState<string | null>(null);
 
-  // Mock data for riwayat
-  const riwayatData: RiwayatRecord[] = [
-    {
-      nama: "Budi Santoso",
-      nim: "201001100",
-      tindakan: "Disetujui",
-      tanggalDisetujui: "19 Januari 2025",
-      keterangan: "-",
-    },
-    {
-      nama: "Siti Aminah",
-      nim: "201001101",
-      tindakan: "Ditolak",
-      tanggalDisetujui: "18 Januari 2025",
-      keterangan: "Judul tidak sesuai dengan kebutuhan laptop",
-    },
-    {
-      nama: "Ahmad Fauzi",
-      nim: "201001102",
-      tindakan: "Disetujui",
-      tanggalDisetujui: "17 Januari 2025",
-      keterangan: "-",
-    },
-  ];
+  useEffect(() => {
+    let cancelled = false;
+    setLoansLoading(true);
+    setLoansError(null);
+    fetch(`${API_BASE}/api/loans`, { credentials: "include" })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return (await r.json()) as LoanListResponse;
+      })
+      .then((data) => {
+        if (!cancelled) setAllLoans(data.items);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setLoansError(
+            err instanceof Error ? err.message : "Gagal memuat data persetujuan",
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoansLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const permohonanData: PermohonanRecord[] = allLoans
+    .filter((l) => l.status === "PENDING")
+    .map((l) => ({
+      tanggalPengajuan: formatDateFull(l.createdAt),
+      namaMahasiswa: l.borrower?.displayName ?? "-",
+      nim: l.borrower?.uid ?? "-",
+      judulTA: l.thesisTitle ?? "-",
+      abstrak: l.thesisAbstract ?? "-",
+      alasan: l.notes ?? "-",
+    }));
+
+  const riwayatData: RiwayatRecord[] = allLoans
+    .filter((l) => l.status !== "PENDING")
+    .map((l) => ({
+      nama: l.borrower?.displayName ?? "-",
+      nim: l.borrower?.uid ?? "-",
+      tindakan: statusToTindakan(l.status),
+      tanggalDisetujui: formatDateFull(l.updatedAt),
+      keterangan: l.notes ?? "-",
+    }));
 
   const handleDetailClick = (record: PermohonanRecord) => {
     setSelectedRecord(record);
@@ -103,6 +160,26 @@ export default function PersetujuanDosen() {
   };
 
   const renderContent = () => {
+    if (currentView && loansLoading) {
+      return (
+        <div className="flex items-center gap-3 p-4 rounded-lg bg-gray-50 border border-gray-200 text-gray-700">
+          <Loader2 className="w-5 h-5 animate-spin" />
+          <span>Memuat data persetujuan…</span>
+        </div>
+      );
+    }
+    if (currentView && loansError) {
+      return (
+        <div className="flex items-start gap-3 p-4 rounded-lg bg-red-50 border border-red-200 text-red-800">
+          <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="font-medium">Gagal memuat data persetujuan</p>
+            <p className="text-sm">{loansError}</p>
+          </div>
+        </div>
+      );
+    }
+
     if (currentView === "permohonan-persetujuan") {
       return (
         <>
