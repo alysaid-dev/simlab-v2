@@ -5,60 +5,94 @@ import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Alert, AlertDescription } from "../components/ui/alert";
 
-type VerificationState = "loading" | "valid-laboran" | "valid-kalab" | "invalid";
+const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
 
-interface VerificationData {
-  nama: string;
-  jabatan: string;
-  laboratorium: string;
-  waktu: string;
-  jenisDokumen: string;
-  namaMahasiswa: string;
-  nim: string;
+type VerificationState = "loading" | "valid" | "invalid";
+
+type BackendDocumentType =
+  | "CLEARANCE_LETTER"
+  | "LOAN_AGREEMENT"
+  | "EQUIPMENT_LOAN"
+  | "OTHER";
+
+interface VerifyResponse {
+  valid: boolean;
+  documentType?: BackendDocumentType;
+  documentId?: string;
+  signerName?: string;
+  signerRole?: string;
+  laboratoryName?: string | null;
+  signedAt?: string;
+  studentName?: string | null;
+  studentNim?: string | null;
+}
+
+const documentTypeLabel: Record<BackendDocumentType, string> = {
+  CLEARANCE_LETTER: "Surat Keterangan Bebas Pinjaman Laboratorium",
+  LOAN_AGREEMENT: "Berita Acara Peminjaman Laptop",
+  EQUIPMENT_LOAN: "Berita Acara Peminjaman Alat",
+  OTHER: "Dokumen SIMLAB",
+};
+
+function formatSignedAt(iso: string | undefined): string {
+  if (!iso) return "-";
+  try {
+    const d = new Date(iso);
+    const datePart = d.toLocaleDateString("id-ID", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+    const timePart = d.toLocaleTimeString("id-ID", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+    return `${datePart}, ${timePart} WIB`;
+  } catch {
+    return iso;
+  }
 }
 
 export default function VerifyQR() {
   const { hash } = useParams<{ hash: string }>();
   const [state, setState] = useState<VerificationState>("loading");
-  const [data, setData] = useState<VerificationData | null>(null);
+  const [data, setData] = useState<VerifyResponse | null>(null);
 
   useEffect(() => {
-    // Simulate loading
-    const timer = setTimeout(() => {
-      // Demo routing for Figma Make preview
-      if (hash === "demo-loading") {
-        setState("loading");
-      } else if (hash === "demo-valid-laboran") {
-        setState("valid-laboran");
-        setData({
-          nama: "Ridhani Anggit Safitri, A.Md",
-          jabatan: "Laboran",
-          laboratorium: "Laboratorium Statistika Manajemen Risiko dan Kebencanaan",
-          waktu: "27 Maret 2026, 14:32:05 WIB",
-          jenisDokumen: "Surat Keterangan Bebas Pinjaman Laboratorium",
-          namaMahasiswa: "Putriana Dwi Agustin",
-          nim: "22611147"
-        });
-      } else if (hash === "demo-valid-kalab") {
-        setState("valid-kalab");
-        setData({
-          nama: "Ghiffari Ahnaf Danarwindu, M.Sc.",
-          jabatan: "Kepala Laboratorium",
-          laboratorium: "Laboratorium Statistika Sains Data",
-          waktu: "27 Maret 2026, 15:10:22 WIB",
-          jenisDokumen: "Surat Keterangan Bebas Pinjaman Laboratorium",
-          namaMahasiswa: "Putriana Dwi Agustin",
-          nim: "22611147"
-        });
-      } else if (hash === "demo-invalid") {
-        setState("invalid");
-      } else {
-        // For any other hash, show invalid state
-        setState("invalid");
-      }
-    }, 1500);
-
-    return () => clearTimeout(timer);
+    if (!hash) {
+      setState("invalid");
+      return;
+    }
+    let cancelled = false;
+    setState("loading");
+    fetch(`${API_BASE}/api/verify/${encodeURIComponent(hash)}`, {
+      // Publik — tidak kirim cookie, tidak perlu SSO.
+      credentials: "omit",
+    })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return (await r.json()) as VerifyResponse;
+      })
+      .then((res) => {
+        if (cancelled) return;
+        if (res.valid) {
+          setData(res);
+          setState("valid");
+        } else {
+          setData(null);
+          setState("invalid");
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setData(null);
+          setState("invalid");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [hash]);
 
   const renderLoading = () => (
@@ -67,17 +101,19 @@ export default function VerifyQR() {
       <h2 className="text-xl font-semibold text-gray-900 mb-2">
         Memverifikasi dokumen...
       </h2>
-      <p className="text-sm text-gray-600">
-        Harap tunggu sebentar
-      </p>
+      <p className="text-sm text-gray-600">Harap tunggu sebentar</p>
     </div>
   );
 
   const renderValid = () => {
     if (!data) return null;
-
-    const isKalab = state === "valid-kalab";
-    const badgeColor = isKalab ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700";
+    const isKalab = data.signerRole === "Kepala Laboratorium";
+    const badgeColor = isKalab
+      ? "bg-purple-100 text-purple-700"
+      : "bg-blue-100 text-blue-700";
+    const jenisDokumen = data.documentType
+      ? documentTypeLabel[data.documentType]
+      : "Dokumen SIMLAB";
 
     return (
       <div className="px-6 py-8">
@@ -94,13 +130,14 @@ export default function VerifyQR() {
             Tanda Tangan Digital Terverifikasi
           </h1>
           <p className="text-sm text-gray-600">
-            Dokumen ini telah ditandatangani secara digital dan tercatat dalam sistem SIMLAB.
+            Dokumen ini telah ditandatangani secara digital dan tercatat dalam
+            sistem SIMLAB.
           </p>
         </div>
 
         {/* Info Card */}
         <Card className="p-6 mb-6 shadow-sm">
-          {/* Section: Penandatangan */}
+          {/* Penandatangan */}
           <div className="mb-4">
             <h3 className="text-sm font-semibold text-gray-700 mb-3">
               Penandatangan
@@ -108,36 +145,42 @@ export default function VerifyQR() {
             <div className="space-y-2">
               <div>
                 <p className="text-sm text-gray-600">Nama</p>
-                <p className="text-base font-medium text-gray-900">{data.nama}</p>
+                <p className="text-base font-medium text-gray-900">
+                  {data.signerName ?? "-"}
+                </p>
               </div>
               <div>
                 <p className="text-sm text-gray-600 mb-1">Jabatan</p>
                 <Badge className={`${badgeColor} hover:${badgeColor}`}>
-                  {data.jabatan}
+                  {data.signerRole ?? "Penandatangan"}
                 </Badge>
               </div>
-              <div>
-                <p className="text-sm text-gray-600">Laboratorium</p>
-                <p className="text-base text-gray-900">{data.laboratorium}</p>
-              </div>
+              {data.laboratoryName && (
+                <div>
+                  <p className="text-sm text-gray-600">Laboratorium</p>
+                  <p className="text-base text-gray-900">
+                    {data.laboratoryName}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Divider */}
           <div className="border-t border-gray-200 my-4"></div>
 
-          {/* Section: Waktu Penandatanganan */}
+          {/* Waktu Penandatanganan */}
           <div className="mb-4">
             <h3 className="text-sm font-semibold text-gray-700 mb-3">
               Waktu Penandatanganan
             </h3>
-            <p className="text-base text-gray-900">{data.waktu}</p>
+            <p className="text-base text-gray-900">
+              {formatSignedAt(data.signedAt)}
+            </p>
           </div>
 
-          {/* Divider */}
           <div className="border-t border-gray-200 my-4"></div>
 
-          {/* Section: Informasi Dokumen */}
+          {/* Informasi Dokumen */}
           <div>
             <h3 className="text-sm font-semibold text-gray-700 mb-3">
               Informasi Dokumen
@@ -145,23 +188,28 @@ export default function VerifyQR() {
             <div className="space-y-2">
               <div>
                 <p className="text-sm text-gray-600">Jenis</p>
-                <p className="text-base text-gray-900">{data.jenisDokumen}</p>
+                <p className="text-base text-gray-900">{jenisDokumen}</p>
               </div>
-              <div>
-                <p className="text-sm text-gray-600">Nama Mahasiswa</p>
-                <p className="text-base text-gray-900">{data.namaMahasiswa}</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">NIM</p>
-                <p className="text-base text-gray-900">{data.nim}</p>
-              </div>
+              {data.studentName && (
+                <div>
+                  <p className="text-sm text-gray-600">Nama Mahasiswa</p>
+                  <p className="text-base text-gray-900">{data.studentName}</p>
+                </div>
+              )}
+              {data.studentNim && (
+                <div>
+                  <p className="text-sm text-gray-600">NIM</p>
+                  <p className="text-base text-gray-900">{data.studentNim}</p>
+                </div>
+              )}
             </div>
           </div>
         </Card>
 
         {/* Note */}
         <p className="text-xs text-gray-500 text-center leading-relaxed">
-          Verifikasi dilakukan secara otomatis oleh sistem SIMLAB. Halaman ini dapat diakses oleh siapapun yang menerima dokumen ini.
+          Verifikasi dilakukan secara otomatis oleh sistem SIMLAB. Halaman ini
+          dapat diakses oleh siapapun yang menerima dokumen ini.
         </p>
       </div>
     );
@@ -169,24 +217,22 @@ export default function VerifyQR() {
 
   const renderInvalid = () => (
     <div className="px-6 py-8">
-      {/* Error Icon */}
       <div className="flex justify-center mb-6">
         <div className="w-20 h-20 rounded-full bg-red-100 flex items-center justify-center">
           <XCircle className="w-12 h-12 text-red-600" />
         </div>
       </div>
 
-      {/* Heading */}
       <div className="text-center mb-8">
         <h1 className="text-2xl font-bold text-gray-900 mb-2">
           Dokumen Tidak Dapat Diverifikasi
         </h1>
         <p className="text-sm text-gray-600">
-          QR code ini tidak ditemukan dalam sistem SIMLAB atau dokumen telah dimanipulasi.
+          QR code ini tidak ditemukan dalam sistem SIMLAB atau dokumen telah
+          dimanipulasi.
         </p>
       </div>
 
-      {/* Warning Card */}
       <Alert className="mb-6 border-red-200 bg-red-50">
         <div className="flex items-start gap-3">
           <ShieldAlert className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
@@ -203,7 +249,6 @@ export default function VerifyQR() {
         </div>
       </Alert>
 
-      {/* Contact Info */}
       <div className="text-center">
         <p className="text-sm font-medium text-gray-900 mb-1">
           Hubungi Laboratorium Statistika FMIPA UII
@@ -220,7 +265,6 @@ export default function VerifyQR() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Simple Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-md mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -232,14 +276,13 @@ export default function VerifyQR() {
           <h1 className="text-base font-semibold text-gray-900">
             Verifikasi Dokumen
           </h1>
-          <div className="w-8"></div> {/* Spacer for balance */}
+          <div className="w-8"></div>
         </div>
       </header>
 
-      {/* Content */}
       <main className="max-w-md mx-auto">
         {state === "loading" && renderLoading()}
-        {(state === "valid-laboran" || state === "valid-kalab") && renderValid()}
+        {state === "valid" && renderValid()}
         {state === "invalid" && renderInvalid()}
       </main>
     </div>

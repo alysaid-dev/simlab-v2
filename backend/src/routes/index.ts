@@ -6,6 +6,7 @@ import loansRoutes from "./loans.routes.js";
 import equipmentRoutes from "./equipment.routes.js";
 import equipmentLoansRoutes from "./equipmentLoans.routes.js";
 import clearancesRoutes from "./clearances.routes.js";
+import verifyRoutes from "./verify.routes.js";
 // ⚠️ TEST-ONLY — remove before production.
 import testRoutes from "./test.routes.js";
 
@@ -22,6 +23,8 @@ router.use("/loans", loansRoutes);
 router.use("/equipment", equipmentRoutes);
 router.use("/equipment-loans", equipmentLoansRoutes);
 router.use("/clearances", clearancesRoutes);
+// PUBLIC endpoint — QR verification. Must stay OUTSIDE any auth guard.
+router.use("/verify", verifyRoutes);
 // ⚠️ TEST-ONLY — remove before production.
 router.use("/test", testRoutes);
 
