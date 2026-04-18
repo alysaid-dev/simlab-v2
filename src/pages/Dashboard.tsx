@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Search, User, LogOut, SearchX } from "lucide-react";
-import { useNavigate } from "react-router";
 import logoImage from "@/assets/logo-statistika.png";
+import { useAuth } from "@/contexts/AuthContext";
 import { DashboardCard } from "../components/DashboardCard";
 import {
   DropdownMenu,
@@ -115,13 +115,12 @@ const modules: ModuleTile[] = [
 ];
 
 export default function Dashboard() {
-  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
+  const { user, loading, logout } = useAuth();
 
-  const handleLogout = () => {
-    // Mock logout — in production this would clear session/SSO tokens
-    navigate("/");
-  };
+  const userLabel = loading
+    ? "Memuat..."
+    : user?.displayName || user?.email || user?.uid || "Tamu";
 
   const filteredModules = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -152,9 +151,12 @@ export default function Dashboard() {
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuLabel>Muhammad Aly Sa`id</DropdownMenuLabel>
+                  <DropdownMenuLabel>{userLabel}</DropdownMenuLabel>
+                  {user?.email && user.email !== userLabel && (
+                    <div className="px-2 pb-1 text-xs text-gray-500 truncate">{user.email}</div>
+                  )}
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleLogout}>
+                  <DropdownMenuItem onClick={() => void logout()}>
                     <LogOut className="w-4 h-4" />
                     Keluar
                   </DropdownMenuItem>

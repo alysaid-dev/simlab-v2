@@ -1,6 +1,7 @@
 import { User, Home, ChevronRight, LogOut } from "lucide-react";
-import { Link, useNavigate } from "react-router";
+import { Link } from "react-router";
 import logoImage from "@/assets/logo-statistika.png";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,11 +23,11 @@ interface PageLayoutProps {
 }
 
 export function PageLayout({ title, breadcrumbs, children, icon, sidebarItems = [], onSidebarItemClick, activeItem, hideHeader = false }: PageLayoutProps) {
-  const navigate = useNavigate();
+  const { user, loading, logout } = useAuth();
 
-  const handleLogout = () => {
-    navigate("/");
-  };
+  const userLabel = loading
+    ? "Memuat..."
+    : user?.displayName || user?.email || user?.uid || "Tamu";
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -49,9 +50,12 @@ export function PageLayout({ title, breadcrumbs, children, icon, sidebarItems = 
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuLabel>Muhammad Aly Sa`id</DropdownMenuLabel>
+                  <DropdownMenuLabel>{userLabel}</DropdownMenuLabel>
+                  {user?.email && user.email !== userLabel && (
+                    <div className="px-2 pb-1 text-xs text-gray-500 truncate">{user.email}</div>
+                  )}
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleLogout}>
+                  <DropdownMenuItem onClick={() => void logout()}>
                     <LogOut className="w-4 h-4" />
                     Keluar
                   </DropdownMenuItem>

@@ -1,3 +1,6 @@
+import https from "node:https";
+import http from "node:http";
+import { URL } from "node:url";
 import type { NextFunction, Request, Response } from "express";
 import { env } from "../config/env.js";
 
@@ -116,40 +119,6 @@ export function hasRoleAtLeast(user: ShibbolethUser, min: Role): boolean {
 // Header parsing & user attach
 // ---------------------------------------------------------------------------
 
-function readHeader(req: Request, name: string): string | null {
-  const raw = req.header(name);
-  if (!raw) return null;
-  try {
-    return decodeURIComponent(raw);
-  } catch {
-    return raw;
-  }
-}
-
-function readMultiHeader(req: Request, name: string): string[] {
-  const value = readHeader(req, name);
-  if (!value) return [];
-  return value
-    .split(/[;,]/)
-    .map((v) => v.trim())
-    .filter((v) => v.length > 0);
-}
-
-function buildUser(req: Request): ShibbolethUser | null {
-  const uid = readHeader(req, "uid");
-  const email = readHeader(req, "mail");
-  const displayName = readHeader(req, "displayname");
-  if (!uid) return null;
-  return {
-    uid,
-    email: email ?? "",
-    displayName: displayName ?? uid,
-    affiliation: readMultiHeader(req, "edupersonaffiliation"),
-    orgUnitDN: readHeader(req, "edupersonorgunitdn"),
-    memberOf: readMultiHeader(req, "memberof"),
-  };
-}
-
 function mockUser(): ShibbolethUser {
   return {
     uid: "22611147",
@@ -161,16 +130,180 @@ function mockUser(): ShibbolethUser {
   };
 }
 
-export function shibbolethAttach(
+/**
+ * Read the `_shibsession_<...>` cookie pair (entire "name=value") from the
+ * request. Returns undefined if none is present. The SP's /Session endpoint
+ * uses this cookie to identify the active session.
+ */
+function extractShibSessionCookie(
+  cookieHeader: string | undefined,
+): string | undefined {
+  if (!cookieHeader) return undefined;
+  for (const part of cookieHeader.split(";")) {
+    const trimmed = part.trim();
+    const eq = trimmed.indexOf("=");
+    if (eq === -1) continue;
+    const name = trimmed.slice(0, eq);
+    if (name.startsWith("_shibsession_")) return trimmed;
+  }
+  return undefined;
+}
+
+/**
+ * Parse the response body of /Shibboleth.sso/Session (plain text wrapped in
+ * HTML by default). We strip tags and collect `Key: Value` pairs from the
+ * attribute section. Returns null if no `uid` was found.
+ */
+function parseSessionBody(body: string): ShibbolethUser | null {
+  const map: Record<string, string> = {};
+  const lineRe = /^\s*([A-Za-z][\w-]*)\s*:\s*(.+?)\s*$/;
+  for (const rawLine of body.split(/\r?\n/)) {
+    const line = rawLine.replace(/<[^>]+>/g, "").trim();
+    const m = line.match(lineRe);
+    if (!m) continue;
+    const [, key, value] = m;
+    if (!value || value === "(none)") continue;
+    if (!(key in map)) map[key] = value;
+  }
+  const uid = map.uid;
+  if (!uid) return null;
+  return {
+    uid,
+    email: map.mail ?? "",
+    displayName: map.displayName ?? uid,
+    affiliation: (map.eduPersonAffiliation ?? "")
+      .split(/[;,]/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0),
+    orgUnitDN: map.eduPersonOrgUnitDN ?? null,
+    memberOf: (map.memberOf ?? "")
+      .split(/[;,]/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0),
+  };
+}
+
+/**
+ * GET the Shibboleth session URL. We forward the user's own `_shibsession_`
+ * cookie plus an `X-Forwarded-For` equal to their original IP — nginx is
+ * configured to honor XFF only when the request comes from 127.0.0.1, so mod
+ * _shib sees the same REMOTE_ADDR that was recorded when the session was
+ * established (passing the session consistency check).
+ *
+ * Resolves to the response body on HTTP 200, or null on any failure/non-200.
+ */
+function fetchSessionBody(
+  sessionUrl: string,
+  cookie: string,
+  hostname: string,
+  clientIp: string,
+): Promise<string | null> {
+  return new Promise((resolve) => {
+    let url: URL;
+    try {
+      url = new URL(sessionUrl);
+    } catch {
+      resolve(null);
+      return;
+    }
+
+    const isHttps = url.protocol === "https:";
+    const lib = isHttps ? https : http;
+    const req = lib.request(
+      {
+        hostname: url.hostname,
+        port: url.port || (isHttps ? 443 : 80),
+        path: url.pathname + url.search,
+        method: "GET",
+        headers: {
+          Cookie: cookie,
+          Host: hostname,
+          "X-Forwarded-For": clientIp,
+        },
+        // Localhost loopback with a self-signed cert — safe to skip TLS verify.
+        ...(isHttps ? { rejectUnauthorized: false } : {}),
+      },
+      (res) => {
+        if (res.statusCode !== 200) {
+          res.resume();
+          resolve(null);
+          return;
+        }
+        const chunks: Buffer[] = [];
+        res.on("data", (c: Buffer) => chunks.push(c));
+        res.on("end", () =>
+          resolve(Buffer.concat(chunks).toString("utf8")),
+        );
+        res.on("error", () => resolve(null));
+      },
+    );
+
+    req.setTimeout(5000, () => {
+      req.destroy();
+      resolve(null);
+    });
+    req.on("error", () => resolve(null));
+    req.end();
+  });
+}
+
+interface CacheEntry {
+  user: ShibbolethUser;
+  expiresAt: number;
+}
+
+const sessionCache = new Map<string, CacheEntry>();
+
+function pickClientIp(req: Request): string {
+  const header = req.header("x-real-ip");
+  if (header) return header.trim();
+  // req.ip respects `trust proxy` — falls back to socket address otherwise.
+  return req.ip ?? "127.0.0.1";
+}
+
+async function resolveShibbolethUser(
+  req: Request,
+): Promise<ShibbolethUser | null> {
+  const cookie = extractShibSessionCookie(req.headers.cookie);
+  if (!cookie) return null;
+
+  const now = Date.now();
+  const cached = sessionCache.get(cookie);
+  if (cached && cached.expiresAt > now) return cached.user;
+
+  const body = await fetchSessionBody(
+    env.shibboleth.sessionUrl,
+    cookie,
+    env.shibboleth.hostname,
+    pickClientIp(req),
+  );
+  if (!body) return null;
+
+  const user = parseSessionBody(body);
+  if (!user) return null;
+
+  sessionCache.set(cookie, {
+    user,
+    expiresAt: now + env.shibboleth.sessionCacheTtlMs,
+  });
+  return user;
+}
+
+export async function shibbolethAttach(
   req: Request,
   _res: Response,
-  next: NextFunction
-): void {
-  const user = buildUser(req);
-  if (user) {
-    req.user = user;
-  } else if (env.shibboleth.devMock) {
-    req.user = mockUser();
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const user = await resolveShibbolethUser(req);
+    if (user) {
+      req.user = user;
+    } else if (env.shibboleth.devMock) {
+      req.user = mockUser();
+    }
+  } catch (err) {
+    console.error("[shibbolethAttach] unexpected error:", err);
+    if (env.shibboleth.devMock) req.user = mockUser();
   }
   next();
 }

@@ -23,6 +23,14 @@ export const env = {
     logoutReturn:
       process.env.SHIBBOLETH_LOGOUT_RETURN ?? "http://localhost:5173/",
     devMock: parseBool(process.env.SHIBBOLETH_DEV_MOCK, false),
+    sessionUrl:
+      process.env.SHIBBOLETH_SESSION_URL ??
+      "https://127.0.0.1/simlab/Shibboleth.sso/Session",
+    hostname: process.env.SHIBBOLETH_HOSTNAME ?? "statistics.uii.ac.id",
+    sessionCacheTtlMs: Number.parseInt(
+      process.env.SHIBBOLETH_SESSION_CACHE_TTL_MS ?? "60000",
+      10,
+    ),
   },
   smtp: {
     host: process.env.SMTP_HOST ?? "",
