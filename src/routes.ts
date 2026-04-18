@@ -85,4 +85,6 @@ export const router = createBrowserRouter([
     path: "/verify/:hash",
     Component: VerifyQR,
   },
-]);
+], {
+  basename: "/simlab",
+});

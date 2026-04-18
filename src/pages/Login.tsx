@@ -4,10 +4,8 @@ import logoImage from "@/assets/logo-statistika.png";
 export default function Login() {
   const navigate = useNavigate();
 
-  const handleGoogleLogin = () => {
-    // Mock Google login - in production, this would integrate with Google OAuth
-    // For now, just navigate to dashboard
-    navigate("/dashboard");
+  const handleSSOLogin = () => {
+    window.location.href = "/simlab/Shibboleth.sso/Login?target=/simlab/dashboard";
   };
 
   return (
@@ -36,7 +34,7 @@ export default function Login() {
 
           {/* Google Sign-In Button */}
           <button
-            onClick={handleGoogleLogin}
+            onClick={handleSSOLogin}
             className="group w-full bg-white border-2 border-gray-300 rounded-lg px-6 py-3 flex items-center justify-center shadow-sm transition-all duration-300 ease-out hover:border-transparent hover:bg-gradient-to-r hover:from-purple-600 hover:via-blue-600 hover:to-cyan-500 hover:shadow-lg hover:shadow-blue-500/25 hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 active:translate-y-0"
           >
             <span className="font-medium text-gray-700 transition-colors duration-300 group-hover:text-white">
