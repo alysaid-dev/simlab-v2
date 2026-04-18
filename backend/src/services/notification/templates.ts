@@ -493,10 +493,51 @@ export interface LoanApprovedByDosenParams {
   disetujuiOleh: string;
   waktuPersetujuan: string;
   linkSimlab?: string;
+  /** Default true. Saat false, template pakai copy penolakan. */
+  approved?: boolean;
+  /** Alasan penolakan — hanya dipakai kalau approved=false. */
+  alasan?: string;
 }
 
 export function loanApprovedByDosenToMahasiswa(p0: LoanApprovedByDosenParams): NotificationTemplate {
   const link = p0.linkSimlab ?? SIMLAB_URL;
+  const isApproved = p0.approved !== false;
+
+  if (!isApproved) {
+    const subject = '[SIMLAB] Permohonan Peminjaman Laptop Ditolak oleh Dosen Pembimbing';
+    const html = emailLayout({
+      greeting: `Yth. ${p0.namaMahasiswa}`,
+      bodyHtml:
+        p('Mohon maaf, permohonan peminjaman laptop Anda telah <strong>ditolak</strong> oleh dosen pembimbing. Berikut detail pengajuan Anda:') +
+        detailTable([
+          ['Kode Laptop', p0.kodeLaptop],
+          ['Laptop', p0.namaLaptop],
+          ['Ditolak Oleh', `${p0.disetujuiOleh} pada ${p0.waktuPersetujuan}`],
+          ...(p0.alasan ? ([['Alasan', p0.alasan]] as Array<[string, string]>) : []),
+        ]) +
+        p('Silakan menghubungi dosen pembimbing untuk klarifikasi, atau ajukan permohonan baru jika diperlukan.'),
+      linkSimlab: link,
+      linkLabel: 'Buka SIMLAB',
+    });
+    const whatsapp = `${WA_SALAM}
+
+*Peminjaman Laptop Ditolak Dosen Pembimbing*
+
+Yth. ${p0.namaMahasiswa},
+Mohon maaf, permohonan peminjaman laptop Anda *ditolak* oleh dosen pembimbing.
+
+${waDetails([
+  ['🏷️ Kode', p0.kodeLaptop],
+  ['💻 Laptop', p0.namaLaptop],
+  ['❌ Ditolak Oleh', `${p0.disetujuiOleh} pada ${p0.waktuPersetujuan}`],
+  ...(p0.alasan ? ([['📝 Alasan', p0.alasan]] as Array<[string, string]>) : []),
+])}
+
+Silakan hubungi dosen pembimbing untuk klarifikasi.
+🔗 ${link}${WA_FOOTER}`;
+    return { subject, html, whatsapp };
+  }
+
   const subject = '[SIMLAB] Permohonan Peminjaman Laptop Disetujui Dosen Pembimbing';
   const html = emailLayout({
     greeting: `Yth. ${p0.namaMahasiswa}`,
@@ -540,10 +581,51 @@ export interface LoanApprovedByKalabParams {
   disetujuiOleh: string;
   waktuPersetujuan: string;
   linkSimlab?: string;
+  /** Default true. Saat false, template pakai copy penolakan. */
+  approved?: boolean;
+  /** Alasan penolakan — hanya dipakai kalau approved=false. */
+  alasan?: string;
 }
 
 export function loanApprovedByKalabToMahasiswa(p0: LoanApprovedByKalabParams): NotificationTemplate {
   const link = p0.linkSimlab ?? SIMLAB_URL;
+  const isApproved = p0.approved !== false;
+
+  if (!isApproved) {
+    const subject = '[SIMLAB] Permohonan Peminjaman Laptop Ditolak oleh Kepala Laboratorium';
+    const html = emailLayout({
+      greeting: `Yth. ${p0.namaMahasiswa}`,
+      bodyHtml:
+        p('Mohon maaf, permohonan peminjaman laptop Anda telah <strong>ditolak</strong> oleh Kepala Laboratorium. Berikut detail pengajuan Anda:') +
+        detailTable([
+          ['Kode Laptop', p0.kodeLaptop],
+          ['Laptop', p0.namaLaptop],
+          ['Ditolak Oleh', `${p0.disetujuiOleh} pada ${p0.waktuPersetujuan}`],
+          ...(p0.alasan ? ([['Alasan', p0.alasan]] as Array<[string, string]>) : []),
+        ]) +
+        p('Silakan menghubungi Kepala Laboratorium untuk klarifikasi, atau ajukan permohonan baru jika diperlukan.'),
+      linkSimlab: link,
+      linkLabel: 'Buka SIMLAB',
+    });
+    const whatsapp = `${WA_SALAM}
+
+*Peminjaman Laptop Ditolak Kepala Lab*
+
+Yth. ${p0.namaMahasiswa},
+Mohon maaf, permohonan peminjaman laptop Anda *ditolak* oleh Kepala Laboratorium.
+
+${waDetails([
+  ['🏷️ Kode', p0.kodeLaptop],
+  ['💻 Laptop', p0.namaLaptop],
+  ['❌ Ditolak Oleh', `${p0.disetujuiOleh} pada ${p0.waktuPersetujuan}`],
+  ...(p0.alasan ? ([['📝 Alasan', p0.alasan]] as Array<[string, string]>) : []),
+])}
+
+Silakan hubungi Kepala Lab untuk klarifikasi.
+🔗 ${link}${WA_FOOTER}`;
+    return { subject, html, whatsapp };
+  }
+
   const subject = '[SIMLAB] Permohonan Peminjaman Laptop Disetujui - Silakan Hubungi Laboran';
   const html = emailLayout({
     greeting: `Yth. ${p0.namaMahasiswa}`,

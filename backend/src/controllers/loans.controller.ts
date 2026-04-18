@@ -11,6 +11,7 @@ import {
   notifyLoanApprovedByDosenToMahasiswa,
   notifyLoanApprovedByKalabToMahasiswa,
   notifyLoanApprovedToLaboran,
+  notifyLoanCreatedToMahasiswa,
 } from "../services/notification/index.js";
 
 const listQuery = z.object({
@@ -34,6 +35,9 @@ const createBody = z.object({
   thesisTitle: z.string().optional(),
   thesisAbstract: z.string().optional(),
   notes: z.string().optional(),
+  // Opsional — kalau dikirim, update User.waNumber supaya prefill
+  // konsisten di form-form berikutnya (mengikuti pola reservations).
+  waNumber: z.string().trim().min(6).optional(),
 });
 
 const statusBody = z.object({
@@ -83,13 +87,39 @@ export const loansController = {
         ? body.userId
         : requester.id;
 
-    const { userId: _ignored, ...rest } = body;
+    // Side-effect: persist nomor WA ke profil user supaya form berikutnya
+    // bisa prefill (hanya kalau yang submit = owner).
+    if (
+      body.waNumber &&
+      targetUserId === requester.id &&
+      body.waNumber !== requester.waNumber
+    ) {
+      await prisma.user.update({
+        where: { id: requester.id },
+        data: { waNumber: body.waNumber },
+      });
+    }
+
+    const { userId: _ignored, waNumber: _wa, ...rest } = body;
     const loan = await loansService.create({
       ...rest,
       userId: targetUserId,
     });
 
-    // Notify dosen pembimbing that a loan awaits their approval.
+    // Notify mahasiswa — konfirmasi permohonan dibuat.
+    void notifyLoanCreatedToMahasiswa(
+      {
+        email: loan.borrower.email ?? undefined,
+        phone: loan.borrower.waNumber ?? undefined,
+      },
+      {
+        namaMahasiswa: loan.borrower.displayName,
+        kodeLaptop: loan.asset.code,
+        namaLaptop: loan.asset.name,
+      },
+    );
+
+    // Notify dosen pembimbing — butuh approval.
     if (loan.lecturer?.email || loan.lecturer?.waNumber) {
       void notifyLoanApprovalToDosen(
         {
@@ -160,6 +190,18 @@ export const loansController = {
           },
         );
       }
+    } else if (status === LoanStatus.REJECTED) {
+      // Penolakan — pakai role caller untuk menentukan template. Kalab
+      // (atau lebih tinggi) pakai template "ditolak kalab"; selain itu
+      // (biasanya DOSEN) pakai template "ditolak dosen".
+      const rejectedByKalab = hasRoleAtLeast(req.user!, "KEPALA_LAB");
+      const notifyFn = rejectedByKalab
+        ? notifyLoanApprovedByKalabToMahasiswa
+        : notifyLoanApprovedByDosenToMahasiswa;
+      void notifyFn(mahasiswaRecipient, {
+        ...commonLoanParams,
+        approved: false,
+      });
     }
 
     res.json(loan);

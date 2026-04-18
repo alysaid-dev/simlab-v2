@@ -26,6 +26,7 @@ interface AssetListResponse {
 
 type BackendLoanStatus =
   | "PENDING"
+  | "APPROVED_BY_DOSEN"
   | "APPROVED"
   | "REJECTED"
   | "ACTIVE"
@@ -79,6 +80,8 @@ function deriveLoanStages(status: BackendLoanStatus): {
   switch (status) {
     case "PENDING":
       return { dosen: "Menunggu", kalab: "-", statusLabel: "Menunggu" };
+    case "APPROVED_BY_DOSEN":
+      return { dosen: "Disetujui", kalab: "Menunggu", statusLabel: "Menunggu Kalab" };
     case "APPROVED":
       return { dosen: "Disetujui", kalab: "Disetujui", statusLabel: "Disetujui" };
     case "ACTIVE":
@@ -353,19 +356,76 @@ export default function PeminjamanLaptop() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Form submitted:", formData);
-    alert("Pengajuan peminjaman berhasil dikirim!");
-    setFormData((prev) => ({
-      ...prev,
-      itemDipilih: "",
-      noWhatsapp: "",
-      dosenPembimbing: "",
-      judulSkripsi: "",
-      abstrak: "",
-      alasanPeminjaman: "",
-    }));
+    if (submitting) return;
+
+    // Resolve assetId dari kode laptop yang dipilih.
+    const asset = laptops.find((a) => a.code === formData.itemDipilih);
+    if (!asset) {
+      alert("Pilih laptop terlebih dahulu.");
+      return;
+    }
+    if (!formData.dosenPembimbing) {
+      alert("Pilih dosen pembimbing.");
+      return;
+    }
+
+    // Default durasi peminjaman: hari ini + 14 hari. Laboran bisa sesuaikan
+    // saat serah terima / extend.
+    const startDate = new Date();
+    const endDate = new Date();
+    endDate.setDate(endDate.getDate() + 14);
+
+    setSubmitting(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/loans`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          assetId: asset.id,
+          lecturerId: formData.dosenPembimbing,
+          type: "TA",
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+          thesisTitle: formData.judulSkripsi || undefined,
+          thesisAbstract: formData.abstrak || undefined,
+          notes: formData.alasanPeminjaman || undefined,
+          waNumber: formData.noWhatsapp || undefined,
+        }),
+      });
+      if (!res.ok) {
+        const err = (await res.json().catch(() => null)) as
+          | { message?: string }
+          | null;
+        throw new Error(err?.message ?? `HTTP ${res.status}`);
+      }
+      alert(
+        "Pengajuan peminjaman berhasil dikirim!\n\n" +
+          "Notifikasi telah dikirim ke dosen pembimbing untuk persetujuan.",
+      );
+      setFormData((prev) => ({
+        ...prev,
+        itemDipilih: "",
+        noWhatsapp: "",
+        dosenPembimbing: "",
+        judulSkripsi: "",
+        abstrak: "",
+        alasanPeminjaman: "",
+      }));
+      setCurrentView("riwayat");
+    } catch (err) {
+      alert(
+        `Gagal mengirim permohonan: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const renderContent = () => {
@@ -596,9 +656,10 @@ export default function PeminjamanLaptop() {
             <div className="pt-4">
               <button
                 type="submit"
-                className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                disabled={submitting}
+                className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
               >
-                Submit Pengajuan
+                {submitting ? "Mengirim..." : "Submit Pengajuan"}
               </button>
             </div>
           </div>
