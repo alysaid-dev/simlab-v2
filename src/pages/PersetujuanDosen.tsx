@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { PageLayout } from "../components/PageLayout";
 import { UserCheck, X, Loader2, AlertTriangle } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 type View = "permohonan-persetujuan" | "riwayat-persetujuan";
 
@@ -83,6 +84,8 @@ function statusToTindakan(status: BackendLoanStatus): string {
 }
 
 export default function PersetujuanDosen() {
+  const { user } = useAuth();
+  const lecturerId = user?.dbUser?.id ?? null;
   const [currentView, setCurrentView] = useState<View | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showTindakanModal, setShowTindakanModal] = useState(false);
@@ -96,11 +99,20 @@ export default function PersetujuanDosen() {
   const [loansLoading, setLoansLoading] = useState(true);
   const [loansError, setLoansError] = useState<string | null>(null);
 
+  // Hanya tampilkan permohonan yang lecturerId-nya = user yang sedang login.
+  // Dosen lain tidak akan melihat bimbingan yang bukan miliknya.
   useEffect(() => {
+    if (!lecturerId) {
+      setLoansLoading(false);
+      return;
+    }
     let cancelled = false;
     setLoansLoading(true);
     setLoansError(null);
-    fetch(`${API_BASE}/api/loans`, { credentials: "include" })
+    fetch(
+      `${API_BASE}/api/loans?lecturerId=${encodeURIComponent(lecturerId)}&take=200`,
+      { credentials: "include" },
+    )
       .then(async (r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return (await r.json()) as LoanListResponse;
@@ -121,7 +133,7 @@ export default function PersetujuanDosen() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [lecturerId]);
 
   const permohonanData: PermohonanRecord[] = allLoans
     .filter((l) => l.status === "PENDING")
@@ -138,7 +150,11 @@ export default function PersetujuanDosen() {
   const [submitting, setSubmitting] = useState(false);
 
   const refetchLoans = () => {
-    fetch(`${API_BASE}/api/loans`, { credentials: "include" })
+    if (!lecturerId) return;
+    fetch(
+      `${API_BASE}/api/loans?lecturerId=${encodeURIComponent(lecturerId)}&take=200`,
+      { credentials: "include" },
+    )
       .then(async (r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return (await r.json()) as LoanListResponse;

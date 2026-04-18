@@ -14,11 +14,13 @@ export const loansService = {
     take?: number;
     status?: LoanStatus;
     userId?: string;
+    lecturerId?: string;
   } = {}) {
-    const { skip = 0, take = 50, status, userId } = params;
+    const { skip = 0, take = 50, status, userId, lecturerId } = params;
     const where: Prisma.LoanWhereInput = {
       ...(status ? { status } : {}),
       ...(userId ? { userId } : {}),
+      ...(lecturerId ? { lecturerId } : {}),
     };
     const [items, total] = await Promise.all([
       prisma.loan.findMany({

@@ -19,6 +19,7 @@ const listQuery = z.object({
   take: z.coerce.number().int().min(1).max(200).optional(),
   status: z.nativeEnum(LoanStatus).optional(),
   userId: z.string().uuid().optional(),
+  lecturerId: z.string().uuid().optional(),
 });
 
 // `userId` in the body is only honored when the caller has LABORAN+ role —
