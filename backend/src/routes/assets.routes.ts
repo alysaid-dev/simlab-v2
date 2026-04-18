@@ -10,9 +10,21 @@ router.use(requireAuth);
 router.get("/", assetsController.list);
 router.get("/:id", assetsController.getById);
 
-// Write — only laboran / admin / kepala-lab
-router.post("/", requireRole("laboran", "admin", "kepala-lab"), assetsController.create);
-router.patch("/:id", requireRole("laboran", "admin", "kepala-lab"), assetsController.update);
-router.delete("/:id", requireRole("admin", "kepala-lab"), assetsController.remove);
+// Write — only LABORAN / KEPALA_LAB / ADMIN / SUPER_ADMIN
+router.post(
+  "/",
+  requireRole("LABORAN", "KEPALA_LAB", "ADMIN", "SUPER_ADMIN"),
+  assetsController.create
+);
+router.patch(
+  "/:id",
+  requireRole("LABORAN", "KEPALA_LAB", "ADMIN", "SUPER_ADMIN"),
+  assetsController.update
+);
+router.delete(
+  "/:id",
+  requireRole("KEPALA_LAB", "ADMIN", "SUPER_ADMIN"),
+  assetsController.remove
+);
 
 export default router;
