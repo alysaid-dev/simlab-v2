@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PageLayout } from "../components/PageLayout";
-import { Package, Search, Plus, Pencil, Wrench, Trash2, CheckCircle, AlertCircle, Eye, ArrowLeft } from "lucide-react";
+import { Package, Search, Plus, Pencil, Wrench, Trash2, CheckCircle, AlertCircle, Eye, ArrowLeft, Loader2 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -11,13 +11,58 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Textarea } from "../components/ui/textarea";
 
+const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
+
 interface Asset {
   id: string;
   nama: string;
-  kategori: "Laptop" | "Proyektor" | "Kamera" | "Peralatan Lab";
   kondisi: "Baik" | "Cukup" | "Rusak";
   status: "Tersedia" | "Dipinjam" | "Maintenance";
   maintenanceSejak?: string;
+}
+
+type BackendAssetStatus = "AVAILABLE" | "BORROWED" | "DAMAGED" | "MAINTENANCE";
+type BackendAssetCondition = "GOOD" | "MINOR_DAMAGE" | "MAJOR_DAMAGE";
+
+interface BackendAsset {
+  id: string;
+  name: string;
+  code: string;
+  condition: BackendAssetCondition;
+  status: BackendAssetStatus;
+  qrHash: string | null;
+  laboratoryId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface AssetListResponse {
+  items: BackendAsset[];
+  total: number;
+  skip: number;
+  take: number;
+}
+
+const conditionMap: Record<BackendAssetCondition, Asset["kondisi"]> = {
+  GOOD: "Baik",
+  MINOR_DAMAGE: "Cukup",
+  MAJOR_DAMAGE: "Rusak",
+};
+
+const statusMap: Record<BackendAssetStatus, Asset["status"]> = {
+  AVAILABLE: "Tersedia",
+  BORROWED: "Dipinjam",
+  DAMAGED: "Maintenance",
+  MAINTENANCE: "Maintenance",
+};
+
+function transformAsset(be: BackendAsset): Asset {
+  return {
+    id: be.code,
+    nama: be.name,
+    kondisi: conditionMap[be.condition],
+    status: statusMap[be.status],
+  };
 }
 
 interface BorrowingHistory {
@@ -106,70 +151,11 @@ const mockCurrentBorrower: Record<string, CurrentBorrower> = {
   }
 };
 
-const mockAssets: Asset[] = [
-  {
-    id: "AST-001",
-    nama: "Laptop Dell Latitude 5420",
-    kategori: "Laptop",
-    kondisi: "Baik",
-    status: "Tersedia"
-  },
-  {
-    id: "AST-002",
-    nama: "Laptop HP ProBook 450 G8",
-    kategori: "Laptop",
-    kondisi: "Baik",
-    status: "Dipinjam"
-  },
-  {
-    id: "AST-003",
-    nama: "Kamera Sony ZV-E10",
-    kategori: "Kamera",
-    kondisi: "Baik",
-    status: "Dipinjam"
-  },
-  {
-    id: "AST-004",
-    nama: "Kamera Canon EOS 90D",
-    kategori: "Kamera",
-    kondisi: "Baik",
-    status: "Maintenance",
-    maintenanceSejak: "15 Maret 2026"
-  },
-  {
-    id: "AST-005",
-    nama: "Mikroskop Digital Zeiss",
-    kategori: "Peralatan Lab",
-    kondisi: "Baik",
-    status: "Tersedia"
-  },
-  {
-    id: "AST-006",
-    nama: "Laptop Lenovo ThinkPad X1",
-    kategori: "Laptop",
-    kondisi: "Rusak",
-    status: "Maintenance",
-    maintenanceSejak: "18 Maret 2026"
-  },
-  {
-    id: "AST-007",
-    nama: "Proyektor Epson EB-X41",
-    kategori: "Proyektor",
-    kondisi: "Baik",
-    status: "Tersedia"
-  },
-  {
-    id: "AST-008",
-    nama: "Spektrofotometer UV-Vis",
-    kategori: "Peralatan Lab",
-    kondisi: "Cukup",
-    status: "Tersedia"
-  }
-];
-
 export default function Aset() {
   const [activeMenu, setActiveMenu] = useState<string>("");
-  const [assets, setAssets] = useState<Asset[]>(mockAssets);
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"Semua" | "Tersedia" | "Dipinjam" | "Maintenance">("Semua");
   
@@ -184,14 +170,37 @@ export default function Aset() {
   // Form fields
   const [formId, setFormId] = useState("");
   const [formNama, setFormNama] = useState("");
-  const [formKategori, setFormKategori] = useState<Asset["kategori"]>("Laptop");
   const [formKondisi, setFormKondisi] = useState<Asset["kondisi"]>("Baik");
   const [formDeskripsi, setFormDeskripsi] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    setIsLoading(true);
+    setError(null);
+    fetch(`${API_BASE}/api/assets`, { credentials: "include" })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return (await r.json()) as AssetListResponse;
+      })
+      .then((data) => {
+        if (!cancelled) setAssets(data.items.map(transformAsset));
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Gagal memuat aset");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleAddAsset = () => {
     setFormId("");
     setFormNama("");
-    setFormKategori("Laptop");
     setFormKondisi("Baik");
     setFormDeskripsi("");
     setAddModalOpen(true);
@@ -201,7 +210,6 @@ export default function Aset() {
     const newAsset: Asset = {
       id: formId,
       nama: formNama,
-      kategori: formKategori,
       kondisi: formKondisi,
       status: "Tersedia"
     };
@@ -213,7 +221,6 @@ export default function Aset() {
     setSelectedAsset(asset);
     setFormId(asset.id);
     setFormNama(asset.nama);
-    setFormKategori(asset.kategori);
     setFormKondisi(asset.kondisi);
     setFormDeskripsi("");
     setEditModalOpen(true);
@@ -226,7 +233,6 @@ export default function Aset() {
           return {
             ...asset,
             nama: formNama,
-            kategori: formKategori,
             kondisi: formKondisi
           };
         }
@@ -307,6 +313,28 @@ export default function Aset() {
   };
 
   const renderContent = () => {
+    if (isLoading) {
+      return (
+        <Card className="p-12">
+          <div className="flex flex-col items-center justify-center text-gray-500 gap-3">
+            <Loader2 className="w-8 h-8 animate-spin" />
+            <p>Memuat data aset...</p>
+          </div>
+        </Card>
+      );
+    }
+
+    if (error) {
+      return (
+        <Alert className="border-red-200 bg-red-50">
+          <AlertCircle className="h-4 w-4 text-red-600" />
+          <AlertDescription className="text-red-800">
+            Gagal memuat aset: {error}
+          </AlertDescription>
+        </Alert>
+      );
+    }
+
     switch (activeMenu) {
       case "Daftar Aset":
         // Show detail view if an asset is selected
@@ -339,7 +367,7 @@ export default function Aset() {
               {/* Asset Info Card */}
               <Card className="bg-gray-50 p-6 mb-6">
                 <h3 className="text-lg font-semibold mb-4">Informasi Aset</h3>
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div>
                     <p className="text-sm text-gray-600">ID Aset</p>
                     <p className="font-mono text-sm font-medium">{viewingAssetDetail.id}</p>
@@ -347,10 +375,6 @@ export default function Aset() {
                   <div className="col-span-2">
                     <p className="text-sm text-gray-600">Nama Aset</p>
                     <p className="font-medium">{viewingAssetDetail.nama}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Kategori</p>
-                    <p className="font-medium">{viewingAssetDetail.kategori}</p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Kondisi</p>
@@ -501,7 +525,6 @@ export default function Aset() {
                     <tr>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">ID Aset</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Nama Aset</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Kategori</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Kondisi</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Status</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Tindakan</th>
@@ -512,7 +535,6 @@ export default function Aset() {
                       <tr key={asset.id} className="bg-white hover:bg-gray-50">
                         <td className="px-4 py-3 text-sm font-mono text-gray-500">{asset.id}</td>
                         <td className="px-4 py-3 text-sm font-medium">{asset.nama}</td>
-                        <td className="px-4 py-3 text-sm">{asset.kategori}</td>
                         <td className="px-4 py-3 text-sm">{asset.kondisi}</td>
                         <td className="px-4 py-3 text-sm">{getStatusBadge(asset.status)}</td>
                         <td className="px-4 py-3 text-sm">
@@ -601,22 +623,7 @@ export default function Aset() {
                       placeholder="Laptop Dell Latitude 5420"
                     />
                   </div>
-                  
-                  <div>
-                    <Label htmlFor="kategori">Kategori</Label>
-                    <Select value={formKategori} onValueChange={(value) => setFormKategori(value as Asset["kategori"])}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Laptop">Laptop</SelectItem>
-                        <SelectItem value="Proyektor">Proyektor</SelectItem>
-                        <SelectItem value="Kamera">Kamera</SelectItem>
-                        <SelectItem value="Peralatan Lab">Peralatan Lab</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
+
                   <div>
                     <Label htmlFor="kondisi">Kondisi</Label>
                     <Select value={formKondisi} onValueChange={(value) => setFormKondisi(value as Asset["kondisi"])}>
@@ -685,22 +692,7 @@ export default function Aset() {
                       onChange={(e) => setFormNama(e.target.value)}
                     />
                   </div>
-                  
-                  <div>
-                    <Label htmlFor="edit-kategori">Kategori</Label>
-                    <Select value={formKategori} onValueChange={(value) => setFormKategori(value as Asset["kategori"])}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Laptop">Laptop</SelectItem>
-                        <SelectItem value="Proyektor">Proyektor</SelectItem>
-                        <SelectItem value="Kamera">Kamera</SelectItem>
-                        <SelectItem value="Peralatan Lab">Peralatan Lab</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
+
                   <div>
                     <Label htmlFor="edit-kondisi">Kondisi</Label>
                     <Select value={formKondisi} onValueChange={(value) => setFormKondisi(value as Asset["kondisi"])}>
@@ -760,7 +752,6 @@ export default function Aset() {
                         <tr>
                           <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">ID Aset</th>
                           <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Nama Aset</th>
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Kategori</th>
                           <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Kondisi</th>
                           <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Sejak</th>
                           <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Tindakan</th>
@@ -771,7 +762,6 @@ export default function Aset() {
                           <tr key={asset.id} className="bg-white hover:bg-gray-50">
                             <td className="px-4 py-3 text-sm font-mono text-gray-500">{asset.id}</td>
                             <td className="px-4 py-3 text-sm font-medium">{asset.nama}</td>
-                            <td className="px-4 py-3 text-sm">{asset.kategori}</td>
                             <td className="px-4 py-3 text-sm">{asset.kondisi}</td>
                             <td className="px-4 py-3 text-sm">{asset.maintenanceSejak}</td>
                             <td className="px-4 py-3 text-sm">
