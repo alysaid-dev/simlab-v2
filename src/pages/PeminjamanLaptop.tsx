@@ -1,10 +1,101 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PageLayout } from "../components/PageLayout";
-import { Laptop } from "lucide-react";
+import { Laptop, Loader2, AlertTriangle } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 type View = "peminjaman-baru" | "riwayat";
 
+const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
+
+type BackendAssetCondition = "GOOD" | "MINOR_DAMAGE" | "MAJOR_DAMAGE";
+type BackendAssetStatus = "AVAILABLE" | "BORROWED" | "DAMAGED" | "MAINTENANCE";
+
+interface BackendAsset {
+  id: string;
+  name: string;
+  code: string;
+  condition: BackendAssetCondition;
+  status: BackendAssetStatus;
+}
+interface AssetListResponse {
+  items: BackendAsset[];
+  total: number;
+  skip: number;
+  take: number;
+}
+
+type BackendLoanStatus =
+  | "PENDING"
+  | "APPROVED"
+  | "REJECTED"
+  | "ACTIVE"
+  | "RETURNED"
+  | "OVERDUE"
+  | "CANCELLED";
+
+interface BackendLoan {
+  id: string;
+  status: BackendLoanStatus;
+  startDate: string;
+  endDate: string;
+  notes: string | null;
+  createdAt: string;
+  asset?: { id: string; name: string; code: string };
+}
+
+interface LoanListResponse {
+  items: BackendLoan[];
+  total: number;
+  skip: number;
+  take: number;
+}
+
+const conditionLabel: Record<BackendAssetCondition, "Baik" | "Cukup" | "Rusak"> = {
+  GOOD: "Baik",
+  MINOR_DAMAGE: "Cukup",
+  MAJOR_DAMAGE: "Rusak",
+};
+
+function formatDate(iso: string): string {
+  if (!iso) return "-";
+  try {
+    return new Date(iso).toLocaleDateString("id-ID", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+// Loan memang tidak punya kolom per-stage (dosen/kalab) di backend;
+// status tunggal di-derive ke dua kolom agar cocok dengan layout tabel lama.
+function deriveLoanStages(status: BackendLoanStatus): {
+  dosen: string;
+  kalab: string;
+  statusLabel: string;
+} {
+  switch (status) {
+    case "PENDING":
+      return { dosen: "Menunggu", kalab: "-", statusLabel: "Menunggu" };
+    case "APPROVED":
+      return { dosen: "Disetujui", kalab: "Disetujui", statusLabel: "Disetujui" };
+    case "ACTIVE":
+      return { dosen: "Disetujui", kalab: "Disetujui", statusLabel: "Aktif" };
+    case "RETURNED":
+      return { dosen: "Disetujui", kalab: "Disetujui", statusLabel: "Selesai" };
+    case "OVERDUE":
+      return { dosen: "Disetujui", kalab: "Disetujui", statusLabel: "Terlambat" };
+    case "REJECTED":
+      return { dosen: "Ditolak", kalab: "-", statusLabel: "Ditolak" };
+    case "CANCELLED":
+      return { dosen: "-", kalab: "-", statusLabel: "Dibatalkan" };
+  }
+}
+
 interface LoanRecord {
+  id: string;
   tanggalPengajuan: string;
   item: string;
   persetujuanDosen: string;
@@ -22,6 +113,8 @@ interface LaptopSpec {
   kondisi: "Baik" | "Cukup" | "Rusak";
 }
 
+// Legacy mock spec lookup — kept for future when backend exposes laptop specs.
+// Tidak dipakai di render saat ini; keys "Laptop 1..10" tidak match code real.
 const laptopSpecs: Record<string, LaptopSpec> = {
   "Laptop 1": {
     prosesor: "Intel Core i5-1035G1 @ 1.00GHz",
@@ -106,20 +199,113 @@ const laptopSpecs: Record<string, LaptopSpec> = {
 };
 
 export default function PeminjamanLaptop() {
+  const { user } = useAuth();
   const [currentView, setCurrentView] = useState<View | null>(null);
   const [formData, setFormData] = useState({
-    itemDipilih: "Laptop 4",
-    nama: "Putriana Dwi Agustin",
-    nim: "22611147",
-    email: "22611147@students.uii.ac.id",
+    itemDipilih: "",
+    nama: "",
+    nim: "",
+    email: "",
     noWhatsapp: "",
-    dosenPembimbing: "Ghiffari Ahnaf Danarwindu, M.Sc.",
+    dosenPembimbing: "",
     judulSkripsi: "",
     abstrak: "",
     alasanPeminjaman: "",
   });
 
-  const laptopOptions = Array.from({ length: 10 }, (_, i) => `Laptop ${i + 1}`);
+  useEffect(() => {
+    setFormData((prev) => ({
+      ...prev,
+      nama: user?.displayName ?? "",
+      nim: user?.uid ?? "",
+      email: user?.email ?? "",
+    }));
+  }, [user]);
+
+  // Laptop dropdown — fetched AVAILABLE assets.
+  const [laptops, setLaptops] = useState<BackendAsset[]>([]);
+  const [laptopsLoading, setLaptopsLoading] = useState(true);
+  const [laptopsError, setLaptopsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLaptopsLoading(true);
+    setLaptopsError(null);
+    fetch(`${API_BASE}/api/assets?status=AVAILABLE`, { credentials: "include" })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return (await r.json()) as AssetListResponse;
+      })
+      .then((data) => {
+        if (!cancelled) setLaptops(data.items);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setLaptopsError(
+            err instanceof Error ? err.message : "Gagal memuat daftar laptop",
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLaptopsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Riwayat — own loans.
+  const [riwayat, setRiwayat] = useState<LoanRecord[]>([]);
+  const [riwayatLoading, setRiwayatLoading] = useState(false);
+  const [riwayatError, setRiwayatError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (currentView !== "riwayat") return;
+    if (!user?.dbUser?.id) return;
+    let cancelled = false;
+    setRiwayatLoading(true);
+    setRiwayatError(null);
+    fetch(
+      `${API_BASE}/api/loans?userId=${encodeURIComponent(user.dbUser.id)}`,
+      { credentials: "include" },
+    )
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return (await r.json()) as LoanListResponse;
+      })
+      .then((data) => {
+        if (cancelled) return;
+        setRiwayat(
+          data.items.map((l) => {
+            const stages = deriveLoanStages(l.status);
+            return {
+              id: l.id,
+              tanggalPengajuan: formatDate(l.createdAt),
+              item: l.asset
+                ? `${l.asset.code} — ${l.asset.name}`
+                : "-",
+              persetujuanDosen: stages.dosen,
+              persetujuanKalab: stages.kalab,
+              status: stages.statusLabel,
+              keterangan: l.notes ?? "-",
+            };
+          }),
+        );
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setRiwayatError(
+            err instanceof Error ? err.message : "Gagal memuat riwayat",
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setRiwayatLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentView, user?.dbUser?.id]);
   const dosenOptions = [
     "Achmad Fauzan, S.Pd., M.Si.",
     "Akhmad Fauzy, Prof., S.Si., M.Si., Ph.D.",
@@ -144,34 +330,6 @@ export default function PeminjamanLaptop() {
     "Ghiffari Ahnaf Danarwindu, M.Sc.",
   ];
 
-  // Mock data for history
-  const riwayatData: LoanRecord[] = [
-    {
-      tanggalPengajuan: "15 Januari 2025",
-      item: "Laptop 3",
-      persetujuanDosen: "Disetujui",
-      persetujuanKalab: "Disetujui",
-      status: "Aktif",
-      keterangan: "-",
-    },
-    {
-      tanggalPengajuan: "10 Januari 2025",
-      item: "Laptop 7",
-      persetujuanDosen: "Disetujui",
-      persetujuanKalab: "Menunggu",
-      status: "Menunggu",
-      keterangan: "-",
-    },
-    {
-      tanggalPengajuan: "5 Januari 2025",
-      item: "Laptop 2",
-      persetujuanDosen: "Ditolak",
-      persetujuanKalab: "-",
-      status: "Ditolak",
-      keterangan: "Judul skripsi belum sesuai dengan kebutuhan laptop",
-    },
-  ];
-
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
@@ -183,23 +341,23 @@ export default function PeminjamanLaptop() {
     e.preventDefault();
     console.log("Form submitted:", formData);
     alert("Pengajuan peminjaman berhasil dikirim!");
-    // Reset form (keep prefilled data)
-    setFormData({
+    setFormData((prev) => ({
+      ...prev,
       itemDipilih: "",
-      nama: "Putriana Dwi Agustin",
-      nim: "22611147",
-      email: "22611147@students.uii.ac.id",
       noWhatsapp: "",
       dosenPembimbing: "",
       judulSkripsi: "",
       abstrak: "",
       alasanPeminjaman: "",
-    });
+    }));
   };
 
   const renderContent = () => {
     if (currentView === "peminjaman-baru") {
-      const selectedLaptop = formData.itemDipilih ? laptopSpecs[formData.itemDipilih] : null;
+      const selectedAsset =
+        formData.itemDipilih
+          ? laptops.find((a) => a.code === formData.itemDipilih) ?? null
+          : null;
       
       return (
         <form onSubmit={handleSubmit} className="w-full max-w-3xl">
@@ -219,63 +377,54 @@ export default function PeminjamanLaptop() {
                     required
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
-                    <option value="">Pilih Laptop</option>
-                    {laptopOptions.map((laptop) => (
-                      <option key={laptop} value={laptop}>
-                        {laptop}
+                    <option value="">
+                      {laptopsLoading
+                        ? "Memuat..."
+                        : laptopsError
+                        ? "Gagal memuat"
+                        : laptops.length === 0
+                        ? "Tidak ada laptop tersedia"
+                        : "Pilih Laptop"}
+                    </option>
+                    {laptops.map((a) => (
+                      <option key={a.id} value={a.code}>
+                        {a.code} — {a.name}
                       </option>
                     ))}
                   </select>
+                  {laptopsError && (
+                    <p className="text-xs text-red-600 mt-1">
+                      {laptopsError}
+                    </p>
+                  )}
                 </div>
 
-                {/* Right: Specification Card */}
+                {/* Right: Info Card */}
                 <div className="flex-1">
-                  {!selectedLaptop ? (
+                  {!selectedAsset ? (
                     <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 flex items-center justify-center text-gray-400 text-sm h-full min-h-[120px]">
-                      Pilih laptop untuk melihat spesifikasi
+                      Pilih laptop untuk melihat info
                     </div>
                   ) : (
                     <div className="bg-blue-50 border-2 border-blue-100 rounded-lg p-4">
-                      {/* Header Row */}
                       <div className="flex items-center justify-between mb-3">
                         <span className="font-bold text-blue-800">
-                          {formData.itemDipilih}
+                          {selectedAsset.code}
                         </span>
                         <span
                           className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${
-                            selectedLaptop.kondisi === "Baik"
+                            selectedAsset.condition === "GOOD"
                               ? "bg-green-100 text-green-800"
-                              : selectedLaptop.kondisi === "Cukup"
+                              : selectedAsset.condition === "MINOR_DAMAGE"
                               ? "bg-yellow-100 text-yellow-800"
                               : "bg-red-100 text-red-800"
                           }`}
                         >
-                          {selectedLaptop.kondisi}
+                          {conditionLabel[selectedAsset.condition]}
                         </span>
                       </div>
-
-                      {/* Spec Rows */}
-                      <div className="space-y-1.5 text-sm">
-                        <div className="flex">
-                          <span className="text-blue-500 w-24 flex-shrink-0">Prosesor</span>
-                          <span className="text-blue-900">· {selectedLaptop.prosesor}</span>
-                        </div>
-                        <div className="flex">
-                          <span className="text-blue-500 w-24 flex-shrink-0">RAM</span>
-                          <span className="text-blue-900">· {selectedLaptop.ram}</span>
-                        </div>
-                        <div className="flex">
-                          <span className="text-blue-500 w-24 flex-shrink-0">Penyimpanan</span>
-                          <span className="text-blue-900">· {selectedLaptop.penyimpanan}</span>
-                        </div>
-                        <div className="flex">
-                          <span className="text-blue-500 w-24 flex-shrink-0">Layar</span>
-                          <span className="text-blue-900">· {selectedLaptop.layar}</span>
-                        </div>
-                        <div className="flex">
-                          <span className="text-blue-500 w-24 flex-shrink-0">OS</span>
-                          <span className="text-blue-900">· {selectedLaptop.os}</span>
-                        </div>
+                      <div className="text-sm text-blue-900">
+                        {selectedAsset.name}
                       </div>
                     </div>
                   )}
@@ -439,6 +588,32 @@ export default function PeminjamanLaptop() {
     }
 
     if (currentView === "riwayat") {
+      if (riwayatLoading) {
+        return (
+          <div className="flex items-center gap-3 p-4 rounded-lg bg-gray-50 border border-gray-200 text-gray-700">
+            <Loader2 className="w-5 h-5 animate-spin" />
+            <span>Memuat riwayat pengajuan…</span>
+          </div>
+        );
+      }
+      if (riwayatError) {
+        return (
+          <div className="flex items-start gap-3 p-4 rounded-lg bg-red-50 border border-red-200 text-red-800">
+            <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-medium">Gagal memuat riwayat</p>
+              <p className="text-sm">{riwayatError}</p>
+            </div>
+          </div>
+        );
+      }
+      if (riwayat.length === 0) {
+        return (
+          <div className="text-center py-12 text-gray-500">
+            Belum ada riwayat peminjaman laptop.
+          </div>
+        );
+      }
       return (
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -465,8 +640,8 @@ export default function PeminjamanLaptop() {
               </tr>
             </thead>
             <tbody>
-              {riwayatData.map((record, index) => (
-                <tr key={index} className="border-b hover:bg-gray-50">
+              {riwayat.map((record) => (
+                <tr key={record.id} className="border-b hover:bg-gray-50">
                   <td className="py-3 px-4 text-gray-700">
                     {record.tanggalPengajuan}
                   </td>

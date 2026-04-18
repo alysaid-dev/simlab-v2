@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { PageLayout } from "../components/PageLayout";
 import { FileCheck, Download, AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 type View = "pengajuan" | "riwayat";
 
@@ -26,7 +27,64 @@ interface ObligationsResponse {
   message: string;
 }
 
+type BackendClearanceStatus =
+  | "DRAFT"
+  | "SUBMITTED"
+  | "PENDING_LECTURER"
+  | "PENDING_KEPALA_LAB"
+  | "PENDING_LABORAN"
+  | "APPROVED"
+  | "REJECTED";
+
+interface BackendClearance {
+  id: string;
+  userId: string;
+  status: BackendClearanceStatus;
+  approvedBy: string | null;
+  approvedAt: string | null;
+  documentPath: string | null;
+  qrHash: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  user?: { id: string; displayName: string; uid: string };
+  approver?: { id: string; displayName: string } | null;
+}
+
+interface ClearanceListResponse {
+  items: BackendClearance[];
+  total: number;
+  skip: number;
+  take: number;
+}
+
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
+
+function deriveStageLabels(status: BackendClearanceStatus): {
+  laboran: string;
+  kalab: string;
+} {
+  switch (status) {
+    case "PENDING_LABORAN":
+      return { laboran: "Menunggu", kalab: "-" };
+    case "PENDING_KEPALA_LAB":
+      return { laboran: "Disetujui", kalab: "Menunggu" };
+    case "APPROVED":
+      return { laboran: "Disetujui", kalab: "Disetujui" };
+    case "REJECTED":
+    case "DRAFT":
+    case "SUBMITTED":
+    case "PENDING_LECTURER":
+    default:
+      return { laboran: "-", kalab: "-" };
+  }
+}
+
+function deriveStatusLabel(status: BackendClearanceStatus): string {
+  if (status === "APPROVED") return "Selesai";
+  if (status === "REJECTED") return "Ditolak";
+  return "Menunggu";
+}
 
 function formatDate(iso: string): string {
   if (!iso) return "-";
@@ -42,21 +100,84 @@ function formatDate(iso: string): string {
 }
 
 interface SuratRecord {
+  id: string;
   tanggalPengajuan: string;
   persetujuanLaboran: string;
   persetujuanKalab: string;
   status: string;
   keterangan: string;
+  documentPath: string | null;
 }
 
 export default function SuratBebasLab() {
+  const { user } = useAuth();
   const [currentView, setCurrentView] = useState<View | null>(null);
   const [formData, setFormData] = useState({
-    nama: "Rizal Pratama Putra, S.T.",
-    nim: "151002233",
-    email: "151002233@uii.ac.id",
+    nama: "",
+    nim: "",
+    email: "",
     tanggalSidang: "",
   });
+
+  useEffect(() => {
+    setFormData((prev) => ({
+      ...prev,
+      nama: user?.displayName ?? "",
+      nim: user?.uid ?? "",
+      email: user?.email ?? "",
+    }));
+  }, [user]);
+
+  // Riwayat — fetch user's own clearances when tab is opened.
+  const [riwayat, setRiwayat] = useState<SuratRecord[]>([]);
+  const [riwayatLoading, setRiwayatLoading] = useState(false);
+  const [riwayatError, setRiwayatError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (currentView !== "riwayat") return;
+    if (!user?.dbUser?.id) return;
+    let cancelled = false;
+    setRiwayatLoading(true);
+    setRiwayatError(null);
+    fetch(
+      `${API_BASE}/api/clearances?userId=${encodeURIComponent(user.dbUser.id)}`,
+      { credentials: "include" },
+    )
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return (await r.json()) as ClearanceListResponse;
+      })
+      .then((data) => {
+        if (cancelled) return;
+        setRiwayat(
+          data.items.map((c) => {
+            const stages = deriveStageLabels(c.status);
+            return {
+              id: c.id,
+              tanggalPengajuan: formatDate(c.createdAt),
+              persetujuanLaboran: stages.laboran,
+              persetujuanKalab: stages.kalab,
+              status: deriveStatusLabel(c.status),
+              keterangan: c.notes ?? "-",
+              documentPath: c.documentPath,
+            };
+          }),
+        );
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setRiwayatError(
+            err instanceof Error ? err.message : "Gagal memuat riwayat",
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setRiwayatLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentView, user?.dbUser?.id]);
 
   // Obligations gate — user tidak boleh mengajukan surat bebas lab
   // selama masih punya peminjaman aktif.
@@ -96,31 +217,6 @@ export default function SuratBebasLab() {
     };
   }, [currentView]);
 
-  // Mock data for history
-  const riwayatData: SuratRecord[] = [
-    {
-      tanggalPengajuan: "20 Januari 2025",
-      persetujuanLaboran: "Disetujui",
-      persetujuanKalab: "Disetujui",
-      status: "Selesai",
-      keterangan: "-",
-    },
-    {
-      tanggalPengajuan: "18 Januari 2025",
-      persetujuanLaboran: "Disetujui",
-      persetujuanKalab: "Menunggu",
-      status: "Menunggu",
-      keterangan: "-",
-    },
-    {
-      tanggalPengajuan: "15 Januari 2025",
-      persetujuanLaboran: "Ditolak",
-      persetujuanKalab: "-",
-      status: "Ditolak",
-      keterangan: "Masih ada peminjaman laptop yang belum dikembalikan",
-    },
-  ];
-
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
@@ -132,13 +228,7 @@ export default function SuratBebasLab() {
     e.preventDefault();
     console.log("Form submitted:", formData);
     alert("Pengajuan Surat Bebas Lab berhasil dikirim!");
-    // Reset form (except prefilled fields)
-    setFormData({
-      nama: "Rizal Pratama Putra, S.T.",
-      nim: "151002233",
-      email: "151002233@uii.ac.id",
-      tanggalSidang: "",
-    });
+    setFormData((prev) => ({ ...prev, tanggalSidang: "" }));
   };
 
   const handleDownload = () => {
@@ -331,6 +421,32 @@ export default function SuratBebasLab() {
     }
 
     if (currentView === "riwayat") {
+      if (riwayatLoading) {
+        return (
+          <div className="flex items-center gap-3 p-4 rounded-lg bg-gray-50 border border-gray-200 text-gray-700">
+            <Loader2 className="w-5 h-5 animate-spin" />
+            <span>Memuat riwayat pengajuan…</span>
+          </div>
+        );
+      }
+      if (riwayatError) {
+        return (
+          <div className="flex items-start gap-3 p-4 rounded-lg bg-red-50 border border-red-200 text-red-800">
+            <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-medium">Gagal memuat riwayat</p>
+              <p className="text-sm">{riwayatError}</p>
+            </div>
+          </div>
+        );
+      }
+      if (riwayat.length === 0) {
+        return (
+          <div className="text-center py-12 text-gray-500">
+            Belum ada riwayat pengajuan surat bebas lab.
+          </div>
+        );
+      }
       return (
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -357,8 +473,8 @@ export default function SuratBebasLab() {
               </tr>
             </thead>
             <tbody>
-              {riwayatData.map((record, index) => (
-                <tr key={index} className="border-b hover:bg-gray-50">
+              {riwayat.map((record) => (
+                <tr key={record.id} className="border-b hover:bg-gray-50">
                   <td className="py-3 px-4 text-gray-700">
                     {record.tanggalPengajuan}
                   </td>
@@ -409,7 +525,7 @@ export default function SuratBebasLab() {
                     {record.keterangan}
                   </td>
                   <td className="py-3 px-4">
-                    {record.status === "Selesai" ? (
+                    {record.status === "Selesai" && record.documentPath ? (
                       <button
                         onClick={handleDownload}
                         className="flex items-center gap-2 px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"

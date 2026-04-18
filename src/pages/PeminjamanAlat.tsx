@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PageLayout } from "../components/PageLayout";
 import {
   Wrench,
@@ -17,12 +17,141 @@ import {
   Trash2,
   Undo2,
   Eye,
+  Loader2,
+  AlertTriangle,
 } from "lucide-react";
 
 type View = "transaksi" | "peminjaman-aktif" | "terlambat" | "aset" | "riwayat";
 type ToolCategory = "Elektronik" | "Optik" | "Audio" | "Mekanik" | "Lainnya";
 type ToolCondition = "Baik" | "Rusak Ringan" | "Rusak Berat" | "Hilang";
 type BorrowStatus = "Normal" | "Mendekati" | "Terlambat";
+
+const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
+
+type BackendAssetCondition = "GOOD" | "MINOR_DAMAGE" | "MAJOR_DAMAGE";
+type BackendEquipmentStatus = "AVAILABLE" | "OUT_OF_STOCK" | "DAMAGED";
+
+interface BackendEquipment {
+  id: string;
+  name: string;
+  category: string | null;
+  stock: number;
+  condition: BackendAssetCondition;
+  status: BackendEquipmentStatus;
+  laboratoryId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface EquipmentListResponse {
+  items: BackendEquipment[];
+  total: number;
+  skip: number;
+  take: number;
+}
+
+type BackendEqLoanStatus =
+  | "PENDING"
+  | "APPROVED"
+  | "REJECTED"
+  | "ACTIVE"
+  | "RETURNED"
+  | "OVERDUE"
+  | "CANCELLED";
+
+interface BackendEqLoanItem {
+  id: string;
+  equipmentId: string;
+  quantity: number;
+  equipment?: { id: string; name: string; category: string | null };
+}
+
+interface BackendEquipmentLoan {
+  id: string;
+  userId: string;
+  startDate: string;
+  endDate: string;
+  status: BackendEqLoanStatus;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  user?: { id: string; displayName: string; uid: string };
+  items: BackendEqLoanItem[];
+}
+
+interface EquipmentLoanListResponse {
+  items: BackendEquipmentLoan[];
+  total: number;
+  skip: number;
+  take: number;
+}
+
+const allowedCategories: ToolCategory[] = [
+  "Elektronik",
+  "Optik",
+  "Audio",
+  "Mekanik",
+  "Lainnya",
+];
+
+function toToolCategory(raw: string | null | undefined): ToolCategory {
+  if (!raw) return "Lainnya";
+  const hit = allowedCategories.find(
+    (c) => c.toLowerCase() === raw.toLowerCase(),
+  );
+  return hit ?? "Lainnya";
+}
+
+const conditionFrontLabel: Record<BackendAssetCondition, ToolCondition> = {
+  GOOD: "Baik",
+  MINOR_DAMAGE: "Rusak Ringan",
+  MAJOR_DAMAGE: "Rusak Berat",
+};
+
+function formatIdDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString("id-ID", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+function formatIdDateTime(iso: string): string {
+  try {
+    const d = new Date(iso);
+    const datePart = d.toLocaleDateString("id-ID", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+    const timePart = d.toLocaleTimeString("id-ID", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    return `${datePart} — ${timePart}`;
+  } catch {
+    return iso;
+  }
+}
+
+function deriveBorrowStatus(endIso: string): BorrowStatus {
+  const diffMs = new Date(endIso).getTime() - Date.now();
+  if (diffMs < 0) return "Terlambat";
+  if (diffMs < 2 * 24 * 60 * 60 * 1000) return "Mendekati";
+  return "Normal";
+}
+
+function overdueDays(endIso: string): number {
+  const diffMs = Date.now() - new Date(endIso).getTime();
+  if (diffMs <= 0) return 0;
+  return Math.floor(diffMs / (24 * 60 * 60 * 1000));
+}
 
 interface Tool {
   id: string;
@@ -107,140 +236,131 @@ export default function PeminjamanAlat() {
   const [dateFrom, setDateFrom] = useState("2026-04-01");
   const [dateTo, setDateTo] = useState("2026-04-15");
 
-  // Mock data for tools catalog
-  const toolsCatalog: Tool[] = [
-    { id: "ALT-001", name: "Multimeter Digital", category: "Elektronik", stock: 8, totalStock: 8, condition: "Baik" },
-    { id: "ALT-002", name: "Osiloskop", category: "Elektronik", stock: 3, totalStock: 3, condition: "Baik" },
-    { id: "ALT-003", name: "Solder", category: "Elektronik", stock: 12, totalStock: 12, condition: "Baik" },
-    { id: "ALT-004", name: "Tripod Kamera", category: "Optik", stock: 5, totalStock: 5, condition: "Baik" },
-    { id: "ALT-005", name: "Mikrofon Kondenser", category: "Audio", stock: 0, totalStock: 4, condition: "Rusak Ringan" },
-    { id: "ALT-006", name: "Tang Kombinasi", category: "Mekanik", stock: 10, totalStock: 10, condition: "Baik" },
-  ];
+  // Tools catalog — fetched from /api/equipment.
+  const [toolsCatalog, setToolsCatalog] = useState<Tool[]>([]);
+  const [equipmentLoading, setEquipmentLoading] = useState(true);
+  const [equipmentError, setEquipmentError] = useState<string | null>(null);
 
-  // Mock data for active borrowings
-  const activeBorrowings: ActiveBorrowing[] = [
-    {
-      id: "TRX-ALT-001",
-      borrowerName: "Ahmad Fauzan",
-      tools: [
-        { name: "Multimeter Digital", quantity: 1 },
-        { name: "Solder", quantity: 2 },
-      ],
-      dueDate: "Kamis, 17 April 2026",
-      dueTime: "16:00",
-      status: "Normal",
-    },
-    {
-      id: "TRX-ALT-002",
-      borrowerName: "Dewi Lestari",
-      tools: [{ name: "Osiloskop", quantity: 1 }],
-      dueDate: "Rabu, 16 April 2026",
-      dueTime: "14:00",
-      status: "Mendekati",
-    },
-    {
-      id: "TRX-ALT-003",
-      borrowerName: "Rizal Maulana",
-      tools: [{ name: "Tang Kombinasi", quantity: 1 }],
-      dueDate: "Senin, 14 April 2026",
-      dueTime: "10:00",
-      status: "Terlambat",
-    },
-    {
-      id: "TRX-ALT-004",
-      borrowerName: "Siti Aminah",
-      tools: [{ name: "Tripod Kamera", quantity: 1 }],
-      dueDate: "Jumat, 18 April 2026",
-      dueTime: "15:00",
-      status: "Normal",
-    },
-    {
-      id: "TRX-ALT-005",
-      borrowerName: "Budi Santoso",
-      tools: [{ name: "Solder", quantity: 1 }],
-      dueDate: "Rabu, 16 April 2026",
-      dueTime: "16:00",
-      status: "Mendekati",
-    },
-  ];
+  useEffect(() => {
+    let cancelled = false;
+    setEquipmentLoading(true);
+    setEquipmentError(null);
+    fetch(`${API_BASE}/api/equipment`, { credentials: "include" })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return (await r.json()) as EquipmentListResponse;
+      })
+      .then((data) => {
+        if (cancelled) return;
+        setToolsCatalog(
+          data.items.map((e) => ({
+            id: e.id,
+            name: e.name,
+            category: toToolCategory(e.category),
+            stock: e.stock,
+            totalStock: e.stock,
+            condition: conditionFrontLabel[e.condition],
+          })),
+        );
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setEquipmentError(
+            err instanceof Error
+              ? err.message
+              : "Gagal memuat katalog peralatan",
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setEquipmentLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  // Mock data for overdue borrowings
-  const overdueBorrowings: OverdueBorrowing[] = [
-    {
-      id: "TRX-ALT-003",
-      borrowerName: "Rizal Maulana",
-      tools: [{ name: "Tang Kombinasi", quantity: 1 }],
-      dueDate: "Senin, 14 April 2026 — 10:00",
-      overdueDays: 3,
-      fine: 15000,
-    },
-    {
-      id: "TRX-ALT-006",
-      borrowerName: "Hendra Wijaya",
-      tools: [{ name: "Multimeter Digital", quantity: 1 }],
-      dueDate: "Selasa, 15 April 2026 — 16:00",
-      overdueDays: 1,
-      fine: 5000,
-    },
-    {
-      id: "TRX-ALT-007",
-      borrowerName: "Putri Ayu",
-      tools: [
-        { name: "Solder", quantity: 2 },
-        { name: "Tripod Kamera", quantity: 1 },
-      ],
-      dueDate: "Minggu, 13 April 2026 — 12:00",
-      overdueDays: 5,
-      fine: 25000,
-    },
-  ];
+  // Equipment loans — fetched once, then client-side filter per view.
+  const [allEqLoans, setAllEqLoans] = useState<BackendEquipmentLoan[]>([]);
+  const [eqLoansLoading, setEqLoansLoading] = useState(true);
+  const [eqLoansError, setEqLoansError] = useState<string | null>(null);
 
-  // Mock data for history
-  const historyRecords: HistoryRecord[] = [
-    {
-      id: "TRX-ALT-008",
-      userId: "20611001",
-      userName: "Fajar Nugraha",
-      tools: [
-        { name: "Multimeter Digital", id: "ALT-001", quantity: 1, returnCondition: "Baik" },
-        { name: "Solder", id: "ALT-003", quantity: 2, returnCondition: "Baik" },
-      ],
-      borrowTime: "Senin, 8 April 2026 — 09:00",
-      returnTime: "Rabu, 10 April 2026 — 15:30",
-    },
-    {
-      id: "TRX-ALT-009",
-      userId: "20611002",
-      userName: "Laila Fitriani",
-      tools: [{ name: "Osiloskop", id: "ALT-002", quantity: 1, returnCondition: "Baik" }],
-      borrowTime: "Selasa, 9 April 2026 — 10:00",
-      returnTime: "Kamis, 11 April 2026 — 14:00",
-    },
-    {
-      id: "TRX-ALT-010",
-      userId: "20611003",
-      userName: "Deni Pratama",
-      tools: [{ name: "Tang Kombinasi", id: "ALT-006", quantity: 1, returnCondition: "Baik" }],
-      borrowTime: "Rabu, 10 April 2026 — 11:00",
-      returnTime: "Jumat, 12 April 2026 — 16:00",
-    },
-    {
-      id: "TRX-ALT-011",
-      userId: "20611004",
-      userName: "Maya Sari",
-      tools: [{ name: "Tripod Kamera", id: "ALT-004", quantity: 1, returnCondition: "Baik" }],
-      borrowTime: "Kamis, 11 April 2026 — 13:00",
-      returnTime: "Sabtu, 13 April 2026 — 10:00",
-    },
-    {
-      id: "TRX-ALT-012",
-      userId: "20611005",
-      userName: "Yusuf Hidayat",
-      tools: [{ name: "Solder", id: "ALT-003", quantity: 1, returnCondition: "Rusak Ringan" }],
-      borrowTime: "Jumat, 12 April 2026 — 14:00",
-      returnTime: "Minggu, 14 April 2026 — 12:00",
-    },
-  ];
+  useEffect(() => {
+    let cancelled = false;
+    setEqLoansLoading(true);
+    setEqLoansError(null);
+    fetch(`${API_BASE}/api/equipment-loans`, { credentials: "include" })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return (await r.json()) as EquipmentLoanListResponse;
+      })
+      .then((data) => {
+        if (!cancelled) setAllEqLoans(data.items);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setEqLoansError(
+            err instanceof Error
+              ? err.message
+              : "Gagal memuat data peminjaman",
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setEqLoansLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const activeBorrowings: ActiveBorrowing[] = allEqLoans
+    .filter((l) => l.status === "ACTIVE" || l.status === "OVERDUE")
+    .map((l) => ({
+      id: `TRX-ALT-${l.id.slice(0, 8).toUpperCase()}`,
+      borrowerName: l.user?.displayName ?? "-",
+      tools: l.items.map((it) => ({
+        name: it.equipment?.name ?? "-",
+        quantity: it.quantity,
+      })),
+      dueDate: formatIdDate(l.endDate),
+      dueTime: new Date(l.endDate).toLocaleTimeString("id-ID", {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      status: deriveBorrowStatus(l.endDate),
+    }));
+
+  const overdueBorrowings: OverdueBorrowing[] = allEqLoans
+    .filter((l) => l.status === "OVERDUE" || (l.status === "ACTIVE" && overdueDays(l.endDate) > 0))
+    .map((l) => ({
+      id: `TRX-ALT-${l.id.slice(0, 8).toUpperCase()}`,
+      borrowerName: l.user?.displayName ?? "-",
+      tools: l.items.map((it) => ({
+        name: it.equipment?.name ?? "-",
+        quantity: it.quantity,
+      })),
+      dueDate: formatIdDateTime(l.endDate),
+      overdueDays: overdueDays(l.endDate),
+      fine: 0, // backend tidak menyimpan fine untuk equipment loan
+    }));
+
+  const historyRecords: HistoryRecord[] = allEqLoans
+    .filter((l) => l.status === "RETURNED")
+    .map((l) => ({
+      id: `TRX-ALT-${l.id.slice(0, 8).toUpperCase()}`,
+      userId: l.user?.uid ?? "-",
+      userName: l.user?.displayName ?? "-",
+      tools: l.items.map((it) => ({
+        name: it.equipment?.name ?? "-",
+        id: it.equipmentId,
+        quantity: it.quantity,
+        returnCondition: "Baik",
+      })),
+      borrowTime: formatIdDateTime(l.startDate),
+      returnTime: formatIdDateTime(l.endDate),
+    }));
+
 
   const handleUserIdChange = (value: string) => {
     setUserId(value);
@@ -356,6 +476,56 @@ export default function PeminjamanAlat() {
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   const renderContent = () => {
+    // Loading/error gate for views that depend on backend data.
+    const needsEquipment = new Set<View>([
+      "transaksi",
+      "aset",
+    ]);
+    const needsEqLoans = new Set<View>([
+      "peminjaman-aktif",
+      "terlambat",
+      "riwayat",
+    ]);
+
+    if (currentView && needsEquipment.has(currentView) && equipmentLoading) {
+      return (
+        <div className="flex items-center gap-3 p-4 rounded-lg bg-gray-50 border border-gray-200 text-gray-700">
+          <Loader2 className="w-5 h-5 animate-spin" />
+          <span>Memuat katalog peralatan…</span>
+        </div>
+      );
+    }
+    if (currentView && needsEquipment.has(currentView) && equipmentError) {
+      return (
+        <div className="flex items-start gap-3 p-4 rounded-lg bg-red-50 border border-red-200 text-red-800">
+          <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="font-medium">Gagal memuat katalog</p>
+            <p className="text-sm">{equipmentError}</p>
+          </div>
+        </div>
+      );
+    }
+    if (currentView && needsEqLoans.has(currentView) && eqLoansLoading) {
+      return (
+        <div className="flex items-center gap-3 p-4 rounded-lg bg-gray-50 border border-gray-200 text-gray-700">
+          <Loader2 className="w-5 h-5 animate-spin" />
+          <span>Memuat data peminjaman…</span>
+        </div>
+      );
+    }
+    if (currentView && needsEqLoans.has(currentView) && eqLoansError) {
+      return (
+        <div className="flex items-start gap-3 p-4 rounded-lg bg-red-50 border border-red-200 text-red-800">
+          <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="font-medium">Gagal memuat peminjaman</p>
+            <p className="text-sm">{eqLoansError}</p>
+          </div>
+        </div>
+      );
+    }
+
     if (currentView === "transaksi") {
       if (showSuccess) {
         return (

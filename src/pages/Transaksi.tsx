@@ -1,5 +1,5 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "../components/ui/dialog";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PageLayout } from "../components/PageLayout";
 import { CreditCard, Search, Loader2, CheckCircle, AlertCircle, Scan, Barcode, Calendar, Clock, MessageCircle, ChevronDown, RotateCcw, CalendarIcon } from "lucide-react";
 import { Button } from "../components/ui/button";
@@ -57,6 +57,54 @@ const mockStudentData = {
   }
 };
 
+const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
+
+type BackendLoanStatus =
+  | "PENDING"
+  | "APPROVED"
+  | "REJECTED"
+  | "ACTIVE"
+  | "RETURNED"
+  | "OVERDUE"
+  | "CANCELLED";
+type BackendLoanType = "TA" | "PRACTICUM";
+
+interface BackendLoan {
+  id: string;
+  userId: string;
+  assetId: string;
+  lecturerId: string | null;
+  type: BackendLoanType;
+  status: BackendLoanStatus;
+  startDate: string;
+  endDate: string;
+  returnDate: string | null;
+  dayLate: number;
+  fine: string | number;
+  thesisTitle: string | null;
+  thesisAbstract: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  borrower?: { id: string; displayName: string; uid: string };
+  asset?: { id: string; name: string; code: string };
+  lecturer?: { id: string; displayName: string } | null;
+}
+
+interface LoanListResponse {
+  items: BackendLoan[];
+  total: number;
+  skip: number;
+  take: number;
+}
+
+function deriveUrgency(endDateIso: string): "normal" | "mendekati" | "terlambat" {
+  const diffMs = new Date(endDateIso).getTime() - Date.now();
+  if (diffMs < 0) return "terlambat";
+  if (diffMs < 2 * 24 * 60 * 60 * 1000) return "mendekati";
+  return "normal";
+}
+
 // Active loan record
 interface ActiveLoan {
   id: string;
@@ -70,70 +118,6 @@ interface ActiveLoan {
   kondisiPengembalian?: string;
   catatanPengembalian?: string;
 }
-
-// Mock active loans data
-const mockActiveLoans: ActiveLoan[] = [
-  {
-    id: "TRX-2026-001",
-    nama: "Ahmad Rizki Maulana",
-    jenis: "Skripsi",
-    laptop: "LAB-LP-001",
-    batasKembali: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000), // 5 days from now
-    whatsapp: "081234567890",
-    status: "normal",
-    denda: 0
-  },
-  {
-    id: "TRX-2026-002",
-    nama: "Dewi Kusuma Wardani",
-    jenis: "Praktikum",
-    laptop: "LAB-LP-003",
-    batasKembali: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000 + 3 * 60 * 60 * 1000), // 1 day 3 hours from now
-    whatsapp: "081234567891",
-    status: "mendekati",
-    denda: 0
-  },
-  {
-    id: "TRX-2026-003",
-    nama: "Budi Santoso",
-    jenis: "Skripsi",
-    laptop: "LAB-LP-005",
-    batasKembali: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
-    whatsapp: "081234567892",
-    status: "terlambat",
-    denda: 100000 // Rp 50.000 per day
-  },
-  {
-    id: "TRX-2026-004",
-    nama: "Siti Aminah",
-    jenis: "Praktikum",
-    laptop: "LAB-LP-007",
-    batasKembali: new Date(Date.now() + 10 * 60 * 60 * 1000), // 10 hours from now
-    whatsapp: "081234567893",
-    status: "mendekati",
-    denda: 0
-  },
-  {
-    id: "TRX-2026-005",
-    nama: "Rudi Hermawan",
-    jenis: "Skripsi",
-    laptop: "LAB-LP-009",
-    batasKembali: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), // 5 days ago
-    whatsapp: "081234567894",
-    status: "terlambat",
-    denda: 250000 // Rp 50.000 per day
-  },
-  {
-    id: "TRX-2026-006",
-    nama: "Ratna Sari",
-    jenis: "Skripsi",
-    laptop: "LAB-LP-012",
-    batasKembali: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), // 1 day ago
-    whatsapp: "081234567895",
-    status: "terlambat",
-    denda: 0 // Not yet calculated
-  }
-];
 
 export default function Transaksi() {
   const [activeMenu, setActiveMenu] = useState<string>("");
@@ -161,8 +145,52 @@ export default function Transaksi() {
   const [praktikumSuccess, setPraktikumSuccess] = useState(false);
   const [praktikumData, setPraktikumData] = useState<any>(null);
 
-  // Active loans state
-  const [activeLoans, setActiveLoans] = useState(mockActiveLoans);
+  // Active loans state — fetched from /api/loans.
+  const [activeLoans, setActiveLoans] = useState<ActiveLoan[]>([]);
+  const [loansLoading, setLoansLoading] = useState(true);
+  const [loansError, setLoansError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoansLoading(true);
+    setLoansError(null);
+    fetch(`${API_BASE}/api/loans`, { credentials: "include" })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return (await r.json()) as LoanListResponse;
+      })
+      .then((data) => {
+        if (cancelled) return;
+        const mapped: ActiveLoan[] = data.items
+          .filter(
+            (l) => l.status === "ACTIVE" || l.status === "OVERDUE",
+          )
+          .map((l) => ({
+            id: `TRX-${l.id.slice(0, 8).toUpperCase()}`,
+            nama: l.borrower?.displayName ?? "-",
+            jenis: l.type === "TA" ? "Skripsi" : "Praktikum",
+            laptop: l.asset?.code ?? "-",
+            batasKembali: new Date(l.endDate),
+            whatsapp: "-",
+            status: deriveUrgency(l.endDate),
+            denda: typeof l.fine === "string" ? Number(l.fine) : l.fine,
+          }));
+        setActiveLoans(mapped);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setLoansError(
+            err instanceof Error ? err.message : "Gagal memuat peminjaman",
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoansLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Extension dialog state
   const [extensionDialogOpen, setExtensionDialogOpen] = useState(false);
@@ -383,6 +411,30 @@ export default function Transaksi() {
   const terlambatCount = activeLoans.filter(loan => loan.status === "terlambat").length;
 
   const renderContent = () => {
+    const loanMenus = new Set(["Peminjaman Aktif", "Jatuh Tempo", "Terlambat"]);
+    if (loanMenus.has(activeMenu)) {
+      if (loansLoading) {
+        return (
+          <Card className="p-12">
+            <div className="flex flex-col items-center justify-center text-gray-500 gap-3">
+              <Loader2 className="w-8 h-8 animate-spin" />
+              <p>Memuat data peminjaman...</p>
+            </div>
+          </Card>
+        );
+      }
+      if (loansError) {
+        return (
+          <Alert className="border-red-200 bg-red-50">
+            <AlertCircle className="h-4 w-4 text-red-600" />
+            <AlertDescription className="text-red-800">
+              Gagal memuat peminjaman: {loansError}
+            </AlertDescription>
+          </Alert>
+        );
+      }
+    }
+
     switch (activeMenu) {
       case "Pengajuan":
         return (
