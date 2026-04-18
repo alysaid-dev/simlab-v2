@@ -48,6 +48,7 @@ function formatDateFull(iso: string): string {
 }
 
 interface PeminjamanLaptopRecord {
+  id: string;
   tanggalPengajuan: string;
   namaMahasiswa: string;
   nim: string;
@@ -71,6 +72,7 @@ interface PeminjamanRuanganRecord {
 }
 
 interface BebasLabRecord {
+  id: string;
   tanggalPengajuan: string;
   namaMahasiswa: string;
   nim: string;
@@ -122,6 +124,7 @@ export default function PersetujuanKepalaLab() {
 
   const peminjamanLaptopData: PeminjamanLaptopRecord[] = pendingLoans.map(
     (l) => ({
+      id: l.id,
       tanggalPengajuan: formatDateFull(l.createdAt),
       namaMahasiswa: l.borrower?.displayName ?? "-",
       nim: l.borrower?.uid ?? "-",
@@ -133,6 +136,99 @@ export default function PersetujuanKepalaLab() {
       tanggalKembali: formatDateFull(l.endDate),
     }),
   );
+
+  // Bebas Lab — fetched from /api/clearances (PENDING_KEPALA_LAB stage).
+  type BackendClearanceStatus =
+    | "DRAFT"
+    | "SUBMITTED"
+    | "PENDING_LECTURER"
+    | "PENDING_KEPALA_LAB"
+    | "PENDING_LABORAN"
+    | "APPROVED"
+    | "REJECTED";
+
+  interface BackendClearance {
+    id: string;
+    status: BackendClearanceStatus;
+    notes: string | null;
+    createdAt: string;
+    user?: { id: string; displayName: string; uid: string; email?: string };
+  }
+
+  const [pendingClearances, setPendingClearances] = useState<BackendClearance[]>(
+    [],
+  );
+  const [clearancesLoading, setClearancesLoading] = useState(true);
+  const [clearancesError, setClearancesError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const refetchLoans = () => {
+    fetch(`${API_BASE}/api/loans?status=PENDING`, { credentials: "include" })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return (await r.json()) as LoanListResponse;
+      })
+      .then((data) => setPendingLoans(data.items))
+      .catch((err) => console.error("[refetchLoans]", err));
+  };
+
+  const refetchClearances = () => {
+    setClearancesLoading(true);
+    setClearancesError(null);
+    fetch(`${API_BASE}/api/clearances?status=PENDING_KEPALA_LAB`, {
+      credentials: "include",
+    })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return (await r.json()) as {
+          items: BackendClearance[];
+          total: number;
+          skip: number;
+          take: number;
+        };
+      })
+      .then((data) => setPendingClearances(data.items))
+      .catch((err) => {
+        setClearancesError(
+          err instanceof Error ? err.message : "Gagal memuat data",
+        );
+      })
+      .finally(() => setClearancesLoading(false));
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    setClearancesLoading(true);
+    setClearancesError(null);
+    fetch(`${API_BASE}/api/clearances?status=PENDING_KEPALA_LAB`, {
+      credentials: "include",
+    })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return (await r.json()) as {
+          items: BackendClearance[];
+          total: number;
+          skip: number;
+          take: number;
+        };
+      })
+      .then((data) => {
+        if (!cancelled) setPendingClearances(data.items);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setClearancesError(
+            err instanceof Error ? err.message : "Gagal memuat data",
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setClearancesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Mock data for Peminjaman Ruangan
   const peminjamanRuanganData: PeminjamanRuanganRecord[] = [
@@ -158,23 +254,14 @@ export default function PersetujuanKepalaLab() {
     },
   ];
 
-  // Mock data for Bebas Lab
-  const bebasLabData: BebasLabRecord[] = [
-    {
-      tanggalPengajuan: "22 Januari 2025",
-      namaMahasiswa: "Putri Wulandari",
-      nim: "191001234",
-      email: "191001234@uii.ac.id",
-      tanggalSidang: "2025-02-15",
-    },
-    {
-      tanggalPengajuan: "21 Januari 2025",
-      namaMahasiswa: "Hendra Kusuma",
-      nim: "191001235",
-      email: "191001235@uii.ac.id",
-      tanggalSidang: "2025-02-20",
-    },
-  ];
+  const bebasLabData: BebasLabRecord[] = pendingClearances.map((c) => ({
+    id: c.id,
+    tanggalPengajuan: formatDateFull(c.createdAt),
+    namaMahasiswa: c.user?.displayName ?? "-",
+    nim: c.user?.uid ?? "-",
+    email: c.user?.email ?? "-",
+    tanggalSidang: "-",
+  }));
 
   const handleDetailClick = (record: any) => {
     setSelectedRecord(record);
@@ -186,20 +273,55 @@ export default function PersetujuanKepalaLab() {
     setShowTindakanModal(true);
   };
 
-  const handleTindakanSubmit = (e: React.FormEvent) => {
+  const handleTindakanSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Tindakan submitted:", tindakanForm);
-    alert(`Permohonan dari ${selectedRecord?.namaMahasiswa} telah ${tindakanForm.tindakan === "Setujui" ? "disetujui" : "ditolak"}`);
-    setShowTindakanModal(false);
-    setTindakanForm({ tindakan: "", keterangan: "" });
+    if (!selectedRecord?.id) return;
+
+    // Peminjaman Laptop: loan PENDING → APPROVED/REJECTED.
+    // Bebas Lab: clearance PENDING_KEPALA_LAB → PENDING_LABORAN (setujui, lanjut
+    // ke Laboran) atau REJECTED. Ruangan: placeholder (seharusnya tidak sampai sini).
+    const isLoan = currentView === "peminjaman-laptop";
+    const endpoint = isLoan
+      ? `/api/loans/${encodeURIComponent(selectedRecord.id)}/status`
+      : `/api/clearances/${encodeURIComponent(selectedRecord.id)}/status`;
+    const setuju = tindakanForm.tindakan === "Setujui";
+    const body = isLoan
+      ? { status: setuju ? "APPROVED" : "REJECTED" }
+      : {
+          status: setuju ? "PENDING_LABORAN" : "REJECTED",
+          notes: tindakanForm.keterangan || undefined,
+        };
+
+    setSubmitting(true);
+    try {
+      const res = await fetch(`${API_BASE}${endpoint}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      alert(
+        `Permohonan dari ${selectedRecord.namaMahasiswa} telah ${
+          setuju ? "disetujui" : "ditolak"
+        }`,
+      );
+      setShowTindakanModal(false);
+      setTindakanForm({ tindakan: "", keterangan: "" });
+      if (isLoan) refetchLoans();
+      else refetchClearances();
+    } catch (err) {
+      alert(
+        `Gagal memproses: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const renderContent = () => {
-    // Ruangan + Bebas Lab belum terintegrasi backend — tampilkan placeholder.
-    if (
-      currentView === "peminjaman-ruangan" ||
-      currentView === "bebas-lab"
-    ) {
+    // Peminjaman Ruangan belum punya backend — tetap placeholder.
+    if (currentView === "peminjaman-ruangan") {
       return (
         <div className="max-w-xl mx-auto mt-12 text-center">
           <div className="w-[120px] h-[120px] mx-auto bg-gradient-to-br from-gray-400 to-gray-500 rounded-xl flex items-center justify-center mb-4">
@@ -209,12 +331,29 @@ export default function PersetujuanKepalaLab() {
             Fitur Segera Hadir
           </h2>
           <p className="text-sm text-gray-500">
-            Modul persetujuan untuk{" "}
-            {currentView === "peminjaman-ruangan"
-              ? "peminjaman ruangan"
-              : "surat bebas lab"}{" "}
-            sedang dalam pengembangan backend.
+            Modul persetujuan peminjaman ruangan sedang dalam pengembangan
+            backend.
           </p>
+        </div>
+      );
+    }
+
+    if (currentView === "bebas-lab" && clearancesLoading) {
+      return (
+        <div className="flex items-center gap-3 p-4 rounded-lg bg-gray-50 border border-gray-200 text-gray-700">
+          <Loader2 className="w-5 h-5 animate-spin" />
+          <span>Memuat permohonan surat bebas lab…</span>
+        </div>
+      );
+    }
+    if (currentView === "bebas-lab" && clearancesError) {
+      return (
+        <div className="flex items-start gap-3 p-4 rounded-lg bg-red-50 border border-red-200 text-red-800">
+          <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="font-medium">Gagal memuat</p>
+            <p className="text-sm">{clearancesError}</p>
+          </div>
         </div>
       );
     }
@@ -468,9 +607,10 @@ export default function PersetujuanKepalaLab() {
                       </button>
                       <button
                         type="submit"
-                        className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                        disabled={submitting || !tindakanForm.tindakan}
+                        className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
                       >
-                        Submit
+                        {submitting ? "Memproses..." : "Submit"}
                       </button>
                     </div>
                   </form>
@@ -482,7 +622,9 @@ export default function PersetujuanKepalaLab() {
       );
     }
 
-    if (currentView === "peminjaman-ruangan") {
+    // Unreachable — placeholder handled above. Kept behind a const-false guard
+    // so TS doesn't complain about narrowed currentView.
+    if (false as boolean) {
       return (
         <>
           <div className="overflow-x-auto">
@@ -711,9 +853,10 @@ export default function PersetujuanKepalaLab() {
                       </button>
                       <button
                         type="submit"
-                        className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                        disabled={submitting || !tindakanForm.tindakan}
+                        className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
                       >
-                        Submit
+                        {submitting ? "Memproses..." : "Submit"}
                       </button>
                     </div>
                   </form>
@@ -918,9 +1061,10 @@ export default function PersetujuanKepalaLab() {
                       </button>
                       <button
                         type="submit"
-                        className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                        disabled={submitting || !tindakanForm.tindakan}
+                        className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
                       >
-                        Submit
+                        {submitting ? "Memproses..." : "Submit"}
                       </button>
                     </div>
                   </form>

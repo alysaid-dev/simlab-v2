@@ -5,6 +5,7 @@ import { UserCheck, X, Loader2, AlertTriangle } from "lucide-react";
 type View = "permohonan-persetujuan" | "riwayat-persetujuan";
 
 interface PermohonanRecord {
+  id: string;
   tanggalPengajuan: string;
   namaMahasiswa: string;
   nim: string;
@@ -123,6 +124,7 @@ export default function PersetujuanDosen() {
   const permohonanData: PermohonanRecord[] = allLoans
     .filter((l) => l.status === "PENDING")
     .map((l) => ({
+      id: l.id,
       tanggalPengajuan: formatDateFull(l.createdAt),
       namaMahasiswa: l.borrower?.displayName ?? "-",
       nim: l.borrower?.uid ?? "-",
@@ -130,6 +132,20 @@ export default function PersetujuanDosen() {
       abstrak: l.thesisAbstract ?? "-",
       alasan: l.notes ?? "-",
     }));
+
+  const [submitting, setSubmitting] = useState(false);
+
+  const refetchLoans = () => {
+    fetch(`${API_BASE}/api/loans`, { credentials: "include" })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return (await r.json()) as LoanListResponse;
+      })
+      .then((data) => setAllLoans(data.items))
+      .catch((err) => {
+        console.error("[refetchLoans]", err);
+      });
+  };
 
   const riwayatData: RiwayatRecord[] = allLoans
     .filter((l) => l.status !== "PENDING")
@@ -151,12 +167,40 @@ export default function PersetujuanDosen() {
     setShowTindakanModal(true);
   };
 
-  const handleTindakanSubmit = (e: React.FormEvent) => {
+  const handleTindakanSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Tindakan submitted:", tindakanForm);
-    alert(`Permohonan ${selectedRecord?.namaMahasiswa} telah ${tindakanForm.tindakan === "Setujui" ? "disetujui" : "ditolak"}`);
-    setShowTindakanModal(false);
-    setTindakanForm({ tindakan: "", keterangan: "" });
+    if (!selectedRecord) return;
+    const nextStatus =
+      tindakanForm.tindakan === "Setujui" ? "APPROVED" : "REJECTED";
+    setSubmitting(true);
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/loans/${encodeURIComponent(selectedRecord.id)}/status`,
+        {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: nextStatus }),
+        },
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      alert(
+        `Permohonan ${selectedRecord.namaMahasiswa} telah ${
+          tindakanForm.tindakan === "Setujui" ? "disetujui" : "ditolak"
+        }`,
+      );
+      setShowTindakanModal(false);
+      setTindakanForm({ tindakan: "", keterangan: "" });
+      refetchLoans();
+    } catch (err) {
+      alert(
+        `Gagal memproses tindakan: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const renderContent = () => {
@@ -397,9 +441,10 @@ export default function PersetujuanDosen() {
                       </button>
                       <button
                         type="submit"
-                        className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                        disabled={submitting || !tindakanForm.tindakan}
+                        className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
                       >
-                        Submit
+                        {submitting ? "Memproses..." : "Submit"}
                       </button>
                     </div>
                   </form>
