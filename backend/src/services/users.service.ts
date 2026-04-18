@@ -114,6 +114,113 @@ export const usersService = {
   },
 
   /**
+   * Buat user + (opsional) assign roles dalam satu transaksi. Idempotent
+   * lewat upsert by email — kalau email sudah ada, update dan re-set roles.
+   */
+  async createOrUpsert(input: {
+    uid: string;
+    email: string;
+    displayName: string;
+    waNumber?: string;
+    roles?: RoleName[];
+  }) {
+    return prisma.$transaction(async (tx) => {
+      const user = await tx.user.upsert({
+        where: { email: input.email },
+        create: {
+          uid: input.uid,
+          email: input.email,
+          displayName: input.displayName,
+          waNumber: input.waNumber,
+          isActive: true,
+        },
+        update: {
+          uid: input.uid,
+          displayName: input.displayName,
+          waNumber: input.waNumber,
+        },
+      });
+
+      if (input.roles !== undefined) {
+        await this.replaceRolesTx(tx, user.id, input.roles);
+      }
+
+      return tx.user.findUnique({
+        where: { id: user.id },
+        include: { roles: { include: { role: true } } },
+      });
+    });
+  },
+
+  async update(
+    id: string,
+    input: Partial<{
+      displayName: string;
+      email: string;
+      waNumber: string | null;
+      isActive: boolean;
+    }>,
+  ) {
+    return prisma.user.update({
+      where: { id },
+      data: input,
+      include: { roles: { include: { role: true } } },
+    });
+  },
+
+  /**
+   * Soft delete — set isActive=false. User punya FK Restrict ke Loan,
+   * Reservation, Clearance, dll. sehingga hard delete gagal kalau user
+   * pernah transaksi.
+   */
+  async softDelete(id: string) {
+    return prisma.user.update({
+      where: { id },
+      data: { isActive: false },
+      include: { roles: { include: { role: true } } },
+    });
+  },
+
+  /**
+   * Ganti daftar roles user secara penuh — role lama yang tidak ada di
+   * `roles` dihapus, yang baru ditambah. Transactional.
+   */
+  async replaceRoles(userId: string, roles: RoleName[]) {
+    return prisma.$transaction(async (tx) => {
+      await this.replaceRolesTx(tx, userId, roles);
+      return tx.user.findUnique({
+        where: { id: userId },
+        include: { roles: { include: { role: true } } },
+      });
+    });
+  },
+
+  // Helper private — di-share antara createOrUpsert dan replaceRoles.
+  async replaceRolesTx(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    roles: RoleName[],
+  ) {
+    // Pastikan semua Role ada (upsert idempotent).
+    const roleIds = new Map<RoleName, string>();
+    for (const name of roles) {
+      const role = await tx.role.upsert({
+        where: { name },
+        create: { name },
+        update: {},
+      });
+      roleIds.set(name, role.id);
+    }
+
+    await tx.userRole.deleteMany({ where: { userId } });
+    if (roles.length > 0) {
+      await tx.userRole.createMany({
+        data: roles.map((name) => ({ userId, roleId: roleIds.get(name)! })),
+      });
+    }
+  },
+
+  /**
    * Cek tanggungan aktif (laptop loans + equipment loans yang belum selesai).
    * Dipakai oleh endpoint /me/obligations DAN sebagai server-side guard
    * saat create surat bebas lab supaya tidak bisa di-bypass dari frontend.

@@ -11,7 +11,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Checkbox } from "../components/ui/checkbox";
 
-type Peran = "Super Admin" | "Admin" | "Laboran" | "Dosen" | "Kepala Laboratorium";
+type Peran =
+  | "Super Admin"
+  | "Admin"
+  | "Laboran"
+  | "Dosen"
+  | "Kepala Laboratorium"
+  | "Staff";
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
 
@@ -46,35 +52,24 @@ interface UserListResponse {
   take: number;
 }
 
-// Prioritize highest role for display — order matches ROLE_RANK in backend.
-const roleRank: Record<BackendRoleName, number> = {
-  SUPER_ADMIN: 6,
-  ADMIN: 5,
-  KEPALA_LAB: 4,
-  DOSEN: 3,
-  LABORAN: 2,
-  STAFF: 1,
-};
-
 const roleLabel: Record<BackendRoleName, Peran> = {
   SUPER_ADMIN: "Super Admin",
   ADMIN: "Admin",
   KEPALA_LAB: "Kepala Laboratorium",
   DOSEN: "Dosen",
   LABORAN: "Laboran",
-  // Fallback — STAFF tidak punya label di UI sehingga di-display sebagai Admin.
-  STAFF: "Admin",
+  STAFF: "Staff",
 };
 
-function pickTopRole(
-  roles: BackendUser["roles"],
-): Peran {
-  if (roles.length === 0) return "Admin";
-  const top = [...roles].sort(
-    (a, b) => roleRank[b.role.name] - roleRank[a.role.name],
-  )[0];
-  return roleLabel[top.role.name];
-}
+// Order untuk dropdown/checkbox — highest authority first.
+const ROLE_CHOICES: BackendRoleName[] = [
+  "SUPER_ADMIN",
+  "ADMIN",
+  "KEPALA_LAB",
+  "DOSEN",
+  "LABORAN",
+  "STAFF",
+];
 
 function formatDateShort(iso: string): string {
   try {
@@ -89,10 +84,11 @@ function formatDateShort(iso: string): string {
 }
 
 interface Account {
-  id: string;
+  id: string;           // display NIM/UID
+  backendId: string;    // UUID untuk API calls
   nama: string;
   email: string;
-  peran: Peran;
+  peran: BackendRoleName[];
   status: "Aktif" | "Nonaktif";
   tanggalDibuat: string;
 }
@@ -121,57 +117,6 @@ interface Role {
   permissions: RolePermissions;
   isBuiltIn: boolean;
 }
-
-const mockAccounts: Account[] = [
-  {
-    id: "SA001",
-    nama: "Dr. Ahmad Wijaya",
-    email: "ahmad.wijaya@uii.ac.id",
-    peran: "Super Admin",
-    status: "Aktif",
-    tanggalDibuat: "15 Jan 2025"
-  },
-  {
-    id: "21611042",
-    nama: "Rizky Aditya Pratama",
-    email: "rizky.aditya@students.uii.ac.id",
-    peran: "Admin",
-    status: "Aktif",
-    tanggalDibuat: "20 Jan 2025"
-  },
-  {
-    id: "19611043",
-    nama: "Budi Santoso",
-    email: "budi.santoso@uii.ac.id",
-    peran: "Laboran",
-    status: "Aktif",
-    tanggalDibuat: "18 Feb 2025"
-  },
-  {
-    id: "20611055",
-    nama: "Prof. Siti Nurhaliza",
-    email: "siti.nurhaliza@uii.ac.id",
-    peran: "Dosen",
-    status: "Aktif",
-    tanggalDibuat: "10 Mar 2025"
-  },
-  {
-    id: "KL001",
-    nama: "Dr. Agus Prasetyo",
-    email: "agus.prasetyo@uii.ac.id",
-    peran: "Kepala Laboratorium",
-    status: "Aktif",
-    tanggalDibuat: "05 Feb 2025"
-  },
-  {
-    id: "21611038",
-    nama: "Dewi Kusuma",
-    email: "dewi.kusuma@students.uii.ac.id",
-    peran: "Admin",
-    status: "Nonaktif",
-    tanggalDibuat: "22 Jan 2025"
-  }
-];
 
 const mockImportData: ImportRow[] = [
   { no: 1, nim: "21611050", email: "user1@students.uii.ac.id", peran: "Admin", valid: true },
@@ -261,41 +206,35 @@ export default function Akun() {
   const [accountsError, setAccountsError] = useState<string | null>(null);
   const [roles, setRoles] = useState<Role[]>(defaultRoles);
 
-  useEffect(() => {
-    let cancelled = false;
+  const mapBackendUser = (u: BackendUser): Account => ({
+    id: u.uid,
+    backendId: u.id,
+    nama: u.displayName,
+    email: u.email,
+    peran: u.roles.map((r) => r.role.name),
+    status: u.isActive ? "Aktif" : "Nonaktif",
+    tanggalDibuat: formatDateShort(u.createdAt),
+  });
+
+  const fetchAccounts = async () => {
     setAccountsLoading(true);
     setAccountsError(null);
-    fetch(`${API_BASE}/api/users`, { credentials: "include" })
-      .then(async (r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return (await r.json()) as UserListResponse;
-      })
-      .then((data) => {
-        if (cancelled) return;
-        setAccounts(
-          data.items.map((u) => ({
-            id: u.uid,
-            nama: u.displayName,
-            email: u.email,
-            peran: pickTopRole(u.roles),
-            status: u.isActive ? ("Aktif" as const) : ("Nonaktif" as const),
-            tanggalDibuat: formatDateShort(u.createdAt),
-          })),
-        );
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setAccountsError(
-            err instanceof Error ? err.message : "Gagal memuat daftar akun",
-          );
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setAccountsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+    try {
+      const r = await fetch(`${API_BASE}/api/users`, { credentials: "include" });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = (await r.json()) as UserListResponse;
+      setAccounts(data.items.map(mapBackendUser));
+    } catch (err) {
+      setAccountsError(
+        err instanceof Error ? err.message : "Gagal memuat daftar akun",
+      );
+    } finally {
+      setAccountsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void fetchAccounts();
   }, []);
   
   // Akun screen state
@@ -309,7 +248,8 @@ export default function Akun() {
   const [formId, setFormId] = useState("");
   const [formNama, setFormNama] = useState("");
   const [formEmail, setFormEmail] = useState("");
-  const [formPeran, setFormPeran] = useState<Peran>("Admin");
+  const [formPeran, setFormPeran] = useState<BackendRoleName[]>([]);
+  const [submitting, setSubmitting] = useState(false);
   // Import Akun state
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [importData, setImportData] = useState<ImportRow[]>([]);
@@ -328,48 +268,113 @@ export default function Akun() {
   const [searchedAccount, setSearchedAccount] = useState<Account | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState(false);
-  const [newPeran, setNewPeran] = useState<Peran>("Admin");
+  const [newPeran, setNewPeran] = useState<BackendRoleName[]>([]);
   const [showChangeSuccess, setShowChangeSuccess] = useState(false);
-  const [oldPeran, setOldPeran] = useState<Peran>("Admin");
+  const [oldPeran, setOldPeran] = useState<BackendRoleName[]>([]);
 
-  const getPeranBadge = (peran: Peran) => {
-    const colors = {
-      "Super Admin": "bg-red-100 text-red-700",
-      "Admin": "bg-orange-100 text-orange-700",
-      "Laboran": "bg-blue-100 text-blue-700",
-      "Dosen": "bg-indigo-100 text-indigo-700",
-      "Kepala Laboratorium": "bg-purple-100 text-purple-700"
-    };
-    return <Badge className={`${colors[peran]} hover:${colors[peran]}`}>{peran}</Badge>;
+  const peranColors: Record<Peran, string> = {
+    "Super Admin": "bg-red-100 text-red-700",
+    Admin: "bg-orange-100 text-orange-700",
+    Laboran: "bg-blue-100 text-blue-700",
+    Dosen: "bg-indigo-100 text-indigo-700",
+    "Kepala Laboratorium": "bg-purple-100 text-purple-700",
+    Staff: "bg-gray-100 text-gray-700",
   };
 
-  const handleToggleStatus = (accountId: string) => {
-    setAccounts(accounts.map(acc => 
-      acc.id === accountId 
-        ? { ...acc, status: acc.status === "Aktif" ? "Nonaktif" : "Aktif" }
-        : acc
-    ));
+  const getPeranBadge = (peran: Peran) => (
+    <Badge className={`${peranColors[peran]} hover:${peranColors[peran]}`}>
+      {peran}
+    </Badge>
+  );
+
+  // Multi-role: render semua role user sebagai kumpulan badge kecil.
+  const renderPeranList = (roles: BackendRoleName[]) => {
+    if (roles.length === 0) {
+      return <span className="text-gray-400 text-xs">—</span>;
+    }
+    return (
+      <div className="flex flex-wrap gap-1">
+        {roles.map((r) => (
+          <Badge key={r} className={`${peranColors[roleLabel[r]]}`}>
+            {roleLabel[r]}
+          </Badge>
+        ))}
+      </div>
+    );
+  };
+
+  const handleToggleStatus = async (accountId: string) => {
+    const account = accounts.find((a) => a.id === accountId);
+    if (!account) return;
+    const nextActive = account.status === "Nonaktif";
+    try {
+      const r = await fetch(
+        `${API_BASE}/api/users/${encodeURIComponent(account.backendId)}`,
+        {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ isActive: nextActive }),
+        },
+      );
+      if (!r.ok) {
+        const e = (await r.json().catch(() => null)) as { message?: string } | null;
+        throw new Error(e?.message ?? `HTTP ${r.status}`);
+      }
+      void fetchAccounts();
+    } catch (err) {
+      alert(
+        `Gagal mengubah status: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
   };
 
   const handleAddAccount = () => {
     setFormId("");
     setFormNama("");
     setFormEmail("");
-    setFormPeran("Admin");
+    setFormPeran([]);
     setAddModalOpen(true);
   };
 
-  const handleSaveNewAccount = () => {
-    const newAccount: Account = {
-      id: formId,
-      nama: formNama,
-      email: formEmail,
-      peran: formPeran,
-      status: "Aktif",
-      tanggalDibuat: new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
-    };
-    setAccounts([...accounts, newAccount]);
-    setAddModalOpen(false);
+  const toggleFormPeran = (role: BackendRoleName) => {
+    setFormPeran((prev) =>
+      prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role],
+    );
+  };
+
+  const handleSaveNewAccount = async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      const r = await fetch(`${API_BASE}/api/users`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          uid: formId.trim(),
+          email: formEmail.trim(),
+          displayName: formNama.trim(),
+          roles: formPeran,
+        }),
+      });
+      if (!r.ok) {
+        const e = (await r.json().catch(() => null)) as { message?: string } | null;
+        throw new Error(e?.message ?? `HTTP ${r.status}`);
+      }
+      await fetchAccounts();
+      setAddModalOpen(false);
+    } catch (err) {
+      alert(
+        `Gagal menambah akun: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleEditAccount = (account: Account) => {
@@ -381,21 +386,84 @@ export default function Akun() {
     setEditModalOpen(true);
   };
 
-  const handleSaveEditAccount = () => {
-    if (selectedAccount) {
-      setAccounts(accounts.map(acc =>
-        acc.id === selectedAccount.id
-          ? { ...acc, nama: formNama, email: formEmail, peran: formPeran }
-          : acc
-      ));
+  const handleSaveEditAccount = async () => {
+    if (!selectedAccount || submitting) return;
+    setSubmitting(true);
+    try {
+      // PATCH basic fields
+      const r1 = await fetch(
+        `${API_BASE}/api/users/${encodeURIComponent(selectedAccount.backendId)}`,
+        {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            displayName: formNama.trim(),
+            email: formEmail.trim(),
+          }),
+        },
+      );
+      if (!r1.ok) {
+        const e = (await r1.json().catch(() => null)) as { message?: string } | null;
+        throw new Error(e?.message ?? `HTTP ${r1.status}`);
+      }
+      // PUT roles (replace)
+      const r2 = await fetch(
+        `${API_BASE}/api/users/${encodeURIComponent(selectedAccount.backendId)}/roles`,
+        {
+          method: "PUT",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ roles: formPeran }),
+        },
+      );
+      if (!r2.ok) {
+        const e = (await r2.json().catch(() => null)) as { message?: string } | null;
+        throw new Error(e?.message ?? `HTTP ${r2.status}`);
+      }
+      await fetchAccounts();
       setEditModalOpen(false);
       setSelectedAccount(null);
+    } catch (err) {
+      alert(
+        `Gagal menyimpan perubahan: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  const handleDeleteAccount = (accountId: string) => {
-    if (confirm("Apakah Anda yakin ingin menghapus akun ini?")) {
-      setAccounts(accounts.filter(acc => acc.id !== accountId));
+  // Soft delete — set isActive=false. User tidak benar-benar dihapus karena
+  // banyak relasi FK Restrict (Loan, Reservation, dll). Akun bisa di-aktifkan
+  // lagi via toggle status.
+  const handleDeleteAccount = async (accountId: string) => {
+    const account = accounts.find((a) => a.id === accountId);
+    if (!account) return;
+    if (
+      !confirm(
+        `Nonaktifkan akun "${account.nama}"? Akun bisa diaktifkan lagi nanti.`,
+      )
+    ) {
+      return;
+    }
+    try {
+      const r = await fetch(
+        `${API_BASE}/api/users/${encodeURIComponent(account.backendId)}`,
+        { method: "DELETE", credentials: "include" },
+      );
+      if (!r.ok) {
+        const e = (await r.json().catch(() => null)) as { message?: string } | null;
+        throw new Error(e?.message ?? `HTTP ${r.status}`);
+      }
+      void fetchAccounts();
+    } catch (err) {
+      alert(
+        `Gagal menonaktifkan akun: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
     }
   };
 
@@ -454,14 +522,30 @@ export default function Akun() {
     }, 800);
   };
 
-  const handleChangeRole = () => {
-    if (searchedAccount) {
-      setAccounts(accounts.map(acc =>
-        acc.id === searchedAccount.id
-          ? { ...acc, peran: newPeran }
-          : acc
-      ));
+  const handleChangeRole = async () => {
+    if (!searchedAccount) return;
+    try {
+      const r = await fetch(
+        `${API_BASE}/api/users/${encodeURIComponent(searchedAccount.backendId)}/roles`,
+        {
+          method: "PUT",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ roles: newPeran }),
+        },
+      );
+      if (!r.ok) {
+        const e = (await r.json().catch(() => null)) as { message?: string } | null;
+        throw new Error(e?.message ?? `HTTP ${r.status}`);
+      }
+      await fetchAccounts();
       setShowChangeSuccess(true);
+    } catch (err) {
+      alert(
+        `Gagal mengubah peran: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
     }
   };
 
@@ -583,7 +667,7 @@ export default function Akun() {
                         <td className="px-4 py-3 text-sm font-mono text-gray-500">{account.id}</td>
                         <td className="px-4 py-3 text-sm font-medium">{account.nama}</td>
                         <td className="px-4 py-3 text-sm">{account.email}</td>
-                        <td className="px-4 py-3 text-sm">{getPeranBadge(account.peran)}</td>
+                        <td className="px-4 py-3 text-sm">{renderPeranList(account.peran)}</td>
                         <td className="px-4 py-3 text-sm">
                           <button
                             onClick={() => handleToggleStatus(account.id)}
@@ -611,13 +695,8 @@ export default function Akun() {
                             
                             <button
                               onClick={() => handleDeleteAccount(account.id)}
-                              className={`p-1.5 hover:bg-gray-100 rounded ${
-                                account.status === "Nonaktif"
-                                  ? "text-gray-600 hover:text-red-600"
-                                  : "text-gray-300 cursor-not-allowed"
-                              }`}
-                              title={account.status === "Aktif" ? "Nonaktifkan akun terlebih dahulu" : "Hapus"}
-                              disabled={account.status === "Aktif"}
+                              className="p-1.5 hover:bg-gray-100 rounded text-gray-600 hover:text-red-600"
+                              title="Nonaktifkan akun"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -677,21 +756,23 @@ export default function Akun() {
                   </div>
                   
                   <div>
-                    <Label htmlFor="peran">Peran</Label>
-                    <Select value={formPeran} onValueChange={(value) => setFormPeran(value as Peran)}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Super Admin">Super Admin</SelectItem>
-                        <SelectItem value="Admin">Admin</SelectItem>
-                        <SelectItem value="Laboran">Laboran</SelectItem>
-                        <SelectItem value="Dosen">Dosen</SelectItem>
-                        <SelectItem value="Kepala Laboratorium">Kepala Laboratorium</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Label>Peran (pilih satu atau lebih)</Label>
+                    <div className="grid grid-cols-2 gap-2 mt-2 p-3 border rounded-md bg-gray-50">
+                      {ROLE_CHOICES.map((role) => (
+                        <label
+                          key={role}
+                          className="flex items-center gap-2 cursor-pointer text-sm"
+                        >
+                          <Checkbox
+                            checked={formPeran.includes(role)}
+                            onCheckedChange={() => toggleFormPeran(role)}
+                          />
+                          {roleLabel[role]}
+                        </label>
+                      ))}
+                    </div>
                   </div>
-                  
+
                 </div>
                 <DialogFooter>
                   <Button variant="outline" onClick={() => setAddModalOpen(false)}>
@@ -699,9 +780,9 @@ export default function Akun() {
                   </Button>
                   <Button
                     onClick={handleSaveNewAccount}
-                    disabled={!formId || !formNama || !formEmail}
+                    disabled={!formId || !formNama || !formEmail || submitting}
                   >
-                    Simpan
+                    {submitting ? "Menyimpan..." : "Simpan"}
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -747,28 +828,33 @@ export default function Akun() {
                   </div>
                   
                   <div>
-                    <Label htmlFor="edit-peran">Peran</Label>
-                    <Select value={formPeran} onValueChange={(value) => setFormPeran(value as Peran)}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Super Admin">Super Admin</SelectItem>
-                        <SelectItem value="Admin">Admin</SelectItem>
-                        <SelectItem value="Laboran">Laboran</SelectItem>
-                        <SelectItem value="Dosen">Dosen</SelectItem>
-                        <SelectItem value="Kepala Laboratorium">Kepala Laboratorium</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Label>Peran (pilih satu atau lebih)</Label>
+                    <div className="grid grid-cols-2 gap-2 mt-2 p-3 border rounded-md bg-gray-50">
+                      {ROLE_CHOICES.map((role) => (
+                        <label
+                          key={role}
+                          className="flex items-center gap-2 cursor-pointer text-sm"
+                        >
+                          <Checkbox
+                            checked={formPeran.includes(role)}
+                            onCheckedChange={() => toggleFormPeran(role)}
+                          />
+                          {roleLabel[role]}
+                        </label>
+                      ))}
+                    </div>
                   </div>
-                  
+
                 </div>
                 <DialogFooter>
                   <Button variant="outline" onClick={() => setEditModalOpen(false)}>
                     Batal
                   </Button>
-                  <Button onClick={handleSaveEditAccount} disabled={!formNama || !formEmail}>
-                    Simpan Perubahan
+                  <Button
+                    onClick={handleSaveEditAccount}
+                    disabled={!formNama || !formEmail || submitting}
+                  >
+                    {submitting ? "Menyimpan..." : "Simpan Perubahan"}
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -1119,9 +1205,11 @@ export default function Akun() {
                       <span className="text-sm text-gray-600">Email:</span>
                       <span className="font-medium">{searchedAccount.email}</span>
                     </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Peran Saat Ini:</span>
-                      {getPeranBadge(searchedAccount.peran)}
+                    <div className="flex justify-between items-start gap-3">
+                      <span className="text-sm text-gray-600 pt-1">Peran Saat Ini:</span>
+                      <div className="flex-1 text-right">
+                        {renderPeranList(searchedAccount.peran)}
+                      </div>
                     </div>
                   </div>
                 </Card>
@@ -1131,28 +1219,37 @@ export default function Akun() {
                   <h3 className="text-lg font-semibold mb-4">Ubah Peran</h3>
                   <div className="space-y-4">
                     <div>
-                      <Label htmlFor="new-role">Peran Baru</Label>
-                      <Select value={newPeran} onValueChange={(value) => setNewPeran(value as Peran)}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Super Admin">Super Admin</SelectItem>
-                          <SelectItem value="Admin">Admin</SelectItem>
-                          <SelectItem value="Laboran">Laboran</SelectItem>
-                          <SelectItem value="Dosen">Dosen</SelectItem>
-                          <SelectItem value="Kepala Laboratorium">Kepala Laboratorium</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <Label>Peran Baru (pilih satu atau lebih)</Label>
+                      <div className="grid grid-cols-2 gap-2 mt-2 p-3 border rounded-md bg-gray-50">
+                        {ROLE_CHOICES.map((role) => (
+                          <label
+                            key={role}
+                            className="flex items-center gap-2 cursor-pointer text-sm"
+                          >
+                            <Checkbox
+                              checked={newPeran.includes(role)}
+                              onCheckedChange={(chk) => {
+                                setNewPeran((prev) =>
+                                  chk
+                                    ? [...prev, role]
+                                    : prev.filter((x) => x !== role),
+                                );
+                              }}
+                            />
+                            {roleLabel[role]}
+                          </label>
+                        ))}
+                      </div>
                       <p className="text-xs text-gray-500 mt-1">
                         Perubahan peran akan langsung berlaku setelah disimpan.
                       </p>
                     </div>
 
-                    {newPeran !== oldPeran && (
+                    {JSON.stringify([...newPeran].sort()) !==
+                      JSON.stringify([...oldPeran].sort()) && (
                       <Alert className="border-yellow-200 bg-yellow-50">
                         <AlertDescription className="text-yellow-800">
-                          Mengubah peran ini akan membatasi akses pengguna ke beberapa modul.
+                          Mengubah peran ini akan mengubah akses pengguna ke beberapa modul.
                         </AlertDescription>
                       </Alert>
                     )}
@@ -1175,7 +1272,18 @@ export default function Akun() {
                   <div>
                     <p className="text-gray-700">
                       Peran <strong>{searchedAccount.nama}</strong> berhasil diubah dari{" "}
-                      <strong>{oldPeran}</strong> menjadi <strong>{newPeran}</strong>.
+                      <strong>
+                        {oldPeran.length > 0
+                          ? oldPeran.map((r) => roleLabel[r]).join(", ")
+                          : "—"}
+                      </strong>{" "}
+                      menjadi{" "}
+                      <strong>
+                        {newPeran.length > 0
+                          ? newPeran.map((r) => roleLabel[r]).join(", ")
+                          : "—"}
+                      </strong>
+                      .
                     </p>
                   </div>
                 </div>
