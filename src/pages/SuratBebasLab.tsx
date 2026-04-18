@@ -224,11 +224,45 @@ export default function SuratBebasLab() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Form submitted:", formData);
-    alert("Pengajuan Surat Bebas Lab berhasil dikirim!");
-    setFormData((prev) => ({ ...prev, tanggalSidang: "" }));
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/clearances`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          notes: formData.tanggalSidang
+            ? `Tanggal sidang: ${formData.tanggalSidang}`
+            : undefined,
+          tanggalSidang: formData.tanggalSidang || undefined,
+        }),
+      });
+      if (!res.ok) {
+        const errBody = (await res.json().catch(() => null)) as
+          | { message?: string }
+          | null;
+        throw new Error(errBody?.message ?? `HTTP ${res.status}`);
+      }
+      alert("Pengajuan Surat Bebas Lab berhasil dikirim!");
+      setFormData((prev) => ({ ...prev, tanggalSidang: "" }));
+      // Refresh obligations sekaligus (kalau ada tanggungan baru muncul
+      // karena race — biar UI akurat).
+      setObligations(null);
+      setCurrentView("riwayat");
+    } catch (err) {
+      alert(
+        `Gagal mengirim pengajuan: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleDownload = () => {
@@ -408,10 +442,10 @@ export default function SuratBebasLab() {
               <div className="pt-4">
                 <button
                   type="submit"
-                  disabled={obligationsLoading || !!obligationsError}
+                  disabled={obligationsLoading || !!obligationsError || submitting}
                   className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
                 >
-                  Submit Pengajuan
+                  {submitting ? "Mengirim..." : "Submit Pengajuan"}
                 </button>
               </div>
             )}

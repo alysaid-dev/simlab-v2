@@ -26,6 +26,7 @@ const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
 
 type BackendLoanStatus =
   | "PENDING"
+  | "APPROVED_BY_DOSEN"
   | "APPROVED"
   | "REJECTED"
   | "ACTIVE"
@@ -66,6 +67,7 @@ function formatDateFull(iso: string): string {
 
 function statusToTindakan(status: BackendLoanStatus): string {
   switch (status) {
+    case "APPROVED_BY_DOSEN":
     case "APPROVED":
     case "ACTIVE":
     case "RETURNED":
@@ -170,8 +172,10 @@ export default function PersetujuanDosen() {
   const handleTindakanSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedRecord) return;
+    // Dosen approval hanya menggeser ke APPROVED_BY_DOSEN — final APPROVED
+    // adalah wewenang Kepala Lab.
     const nextStatus =
-      tindakanForm.tindakan === "Setujui" ? "APPROVED" : "REJECTED";
+      tindakanForm.tindakan === "Setujui" ? "APPROVED_BY_DOSEN" : "REJECTED";
     setSubmitting(true);
     try {
       const res = await fetch(

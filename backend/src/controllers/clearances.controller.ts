@@ -65,6 +65,19 @@ export const clearancesController = {
   create: asyncHandler(async (req, res) => {
     const body = createBody.parse(req.body);
     const requester = await usersService.getByUid(req.user!.uid);
+
+    // Server-side guard: tolak bila masih ada peminjaman aktif. Frontend
+    // juga cek ini lewat /users/me/obligations, tapi guard di sini
+    // memastikan tidak bisa di-bypass dari client.
+    const obligations = await usersService.getObligations(requester.id);
+    if (obligations.hasObligations) {
+      throw new HttpError(
+        409,
+        "Tidak dapat mengajukan surat bebas lab — masih terdapat peminjaman aktif",
+        obligations.details,
+      );
+    }
+
     const letter = await clearancesService.create({
       userId: requester.id,
       notes: body.notes,

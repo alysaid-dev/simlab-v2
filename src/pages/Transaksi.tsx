@@ -17,50 +17,11 @@ import {
   DropdownMenuTrigger,
 } from "../components/ui/dropdown-menu";
 
-// Mock data for student lookup
-const mockStudentData = {
-  "20611157": {
-    nama: "Ridhani Rizal Said",
-    nim: "20611157",
-    programStudi: "Statistika",
-    laptop: "Laptop 4",
-    dosenPembimbing: "Dr. Anggit Wibisono, M.Si",
-    judulSkripsi: "Analisis Faktor-Faktor yang Mempengaruhi Indeks Prestasi Mahasiswa Menggunakan Regresi Logistik Ordinal",
-    tanggalPengajuan: "10 Maret 2026",
-    approvedByDosen: true,
-    approvedByKepalaLab: true,
-    whatsapp: "081234567890"
-  },
-  "2101234567": {
-    nama: "Ahmad Rizki Maulana",
-    nim: "2101234567",
-    programStudi: "S1 Statistika",
-    laptop: "LAB-LP-001",
-    dosenPembimbing: "Dr. Siti Nurjanah, M.Si",
-    judulSkripsi: "Analisis Regresi Logistik untuk Prediksi Kelulusan Mahasiswa",
-    tanggalPengajuan: "20 Maret 2026",
-    approvedByDosen: true,
-    approvedByKepalaLab: true,
-    whatsapp: "081234567890"
-  },
-  "2101234568": {
-    nama: "Dewi Kusuma Wardani",
-    nim: "2101234568",
-    programStudi: "S1 Statistika",
-    laptop: "LAB-LP-003",
-    dosenPembimbing: "Prof. Dr. Budiman Santoso, M.Sc",
-    judulSkripsi: "Implementasi Algoritma Machine Learning dalam Klasifikasi Data",
-    tanggalPengajuan: "22 Maret 2026",
-    approvedByDosen: true,
-    approvedByKepalaLab: true,
-    whatsapp: "081234567891"
-  }
-};
-
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
 
 type BackendLoanStatus =
   | "PENDING"
+  | "APPROVED_BY_DOSEN"
   | "APPROVED"
   | "REJECTED"
   | "ACTIVE"
@@ -86,7 +47,7 @@ interface BackendLoan {
   notes: string | null;
   createdAt: string;
   updatedAt: string;
-  borrower?: { id: string; displayName: string; uid: string };
+  borrower?: { id: string; displayName: string; uid: string; waNumber?: string | null };
   asset?: { id: string; name: string; code: string };
   lecturer?: { id: string; displayName: string } | null;
 }
@@ -98,6 +59,36 @@ interface LoanListResponse {
   take: number;
 }
 
+interface BackendAsset {
+  id: string;
+  name: string;
+  code: string;
+  status: "AVAILABLE" | "BORROWED" | "DAMAGED" | "MAINTENANCE";
+}
+
+interface BackendUser {
+  id: string;
+  uid: string;
+  displayName: string;
+}
+
+interface FoundStudent {
+  nama: string;
+  nim: string;
+  userId: string;
+  loanId: string;
+  laptop: string;
+  laptopCode: string;
+  assetId: string;
+  dosenPembimbing: string;
+  judulSkripsi: string;
+  abstrakSkripsi: string;
+  tanggalPengajuan: string;
+  approvedByDosen: boolean;
+  approvedByKepalaLab: boolean;
+  whatsapp: string;
+}
+
 function deriveUrgency(endDateIso: string): "normal" | "mendekati" | "terlambat" {
   const diffMs = new Date(endDateIso).getTime() - Date.now();
   if (diffMs < 0) return "terlambat";
@@ -107,7 +98,8 @@ function deriveUrgency(endDateIso: string): "normal" | "mendekati" | "terlambat"
 
 // Active loan record
 interface ActiveLoan {
-  id: string;
+  id: string; // display-only "TRX-XXXX"
+  backendId: string; // real UUID untuk PATCH ke backend
   nama: string;
   jenis: string;
   laptop: string;
@@ -125,7 +117,7 @@ export default function Transaksi() {
   // Pengajuan states
   const [searchNIM, setSearchNIM] = useState("");
   const [searchState, setSearchState] = useState<"idle" | "loading" | "found" | "notfound" | "success">("idle");
-  const [foundStudent, setFoundStudent] = useState<any>(null);
+  const [foundStudent, setFoundStudent] = useState<FoundStudent | null>(null);
   const [returnDate, setReturnDate] = useState(() => {
     const date = new Date();
     date.setDate(date.getDate() + 14); // 2 weeks from now
@@ -150,83 +142,141 @@ export default function Transaksi() {
   const [loansLoading, setLoansLoading] = useState(true);
   const [loansError, setLoansError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
+  const fetchActiveLoans = async () => {
     setLoansLoading(true);
     setLoansError(null);
-    fetch(`${API_BASE}/api/loans`, { credentials: "include" })
-      .then(async (r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return (await r.json()) as LoanListResponse;
-      })
-      .then((data) => {
-        if (cancelled) return;
-        const mapped: ActiveLoan[] = data.items
-          .filter(
-            (l) => l.status === "ACTIVE" || l.status === "OVERDUE",
-          )
-          .map((l) => ({
-            id: `TRX-${l.id.slice(0, 8).toUpperCase()}`,
-            nama: l.borrower?.displayName ?? "-",
-            jenis: l.type === "TA" ? "Skripsi" : "Praktikum",
-            laptop: l.asset?.code ?? "-",
-            batasKembali: new Date(l.endDate),
-            whatsapp: "-",
-            status: deriveUrgency(l.endDate),
-            denda: typeof l.fine === "string" ? Number(l.fine) : l.fine,
-          }));
-        setActiveLoans(mapped);
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setLoansError(
-            err instanceof Error ? err.message : "Gagal memuat peminjaman",
-          );
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoansLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+    try {
+      const r = await fetch(`${API_BASE}/api/loans`, { credentials: "include" });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = (await r.json()) as LoanListResponse;
+      const mapped: ActiveLoan[] = data.items
+        .filter((l) => l.status === "ACTIVE" || l.status === "OVERDUE")
+        .map((l) => ({
+          id: `TRX-${l.id.slice(0, 8).toUpperCase()}`,
+          backendId: l.id,
+          nama: l.borrower?.displayName ?? "-",
+          jenis: l.type === "TA" ? "Skripsi" : "Praktikum",
+          laptop: l.asset?.code ?? "-",
+          batasKembali: new Date(l.endDate),
+          whatsapp: l.borrower?.waNumber ?? "-",
+          status: deriveUrgency(l.endDate),
+          denda: typeof l.fine === "string" ? Number(l.fine) : l.fine,
+        }));
+      setActiveLoans(mapped);
+    } catch (err) {
+      setLoansError(
+        err instanceof Error ? err.message : "Gagal memuat peminjaman",
+      );
+    } finally {
+      setLoansLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void fetchActiveLoans();
   }, []);
 
   // Extension dialog state
   const [extensionDialogOpen, setExtensionDialogOpen] = useState(false);
-  const [selectedLoanForExtension, setSelectedLoanForExtension] = useState<any>(null);
+  const [selectedLoanForExtension, setSelectedLoanForExtension] = useState<ActiveLoan | null>(null);
   const [extensionDate, setExtensionDate] = useState("");
   const [extensionTime, setExtensionTime] = useState("16:00");
 
   // Return asset dialog state
   const [returnDialogOpen, setReturnDialogOpen] = useState(false);
-  const [selectedLoanForReturn, setSelectedLoanForReturn] = useState<any>(null);
+  const [selectedLoanForReturn, setSelectedLoanForReturn] = useState<ActiveLoan | null>(null);
   const [assetCondition, setAssetCondition] = useState("Baik");
   const [returnNotes, setReturnNotes] = useState("");
 
   // New perpanjang dialog state
   const [newPerpanjangDialogOpen, setNewPerpanjangDialogOpen] = useState(false);
-  const [selectedLoanForNewExtension, setSelectedLoanForNewExtension] = useState<any>(null);
+  const [selectedLoanForNewExtension, setSelectedLoanForNewExtension] = useState<ActiveLoan | null>(null);
   const [newExtensionDate, setNewExtensionDate] = useState("");
 
-  const handleSearch = () => {
+  const handleSearch = async () => {
     setSearchState("loading");
-    
-    setTimeout(() => {
-      const student = mockStudentData[searchNIM as keyof typeof mockStudentData];
-      if (student) {
-        setFoundStudent(student);
-        setSearchState("found");
-      } else {
+    try {
+      // Cari loan yang sudah fully APPROVED (lolos kalab) untuk NIM ini.
+      // Filter client-side karena backend /api/loans tidak support search by
+      // borrower.uid langsung.
+      const r = await fetch(`${API_BASE}/api/loans?status=APPROVED&take=200`, {
+        credentials: "include",
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = (await r.json()) as LoanListResponse;
+      const match = data.items.find(
+        (l) => l.borrower?.uid === searchNIM,
+      );
+      if (!match) {
         setSearchState("notfound");
         setFoundStudent(null);
+        return;
       }
-    }, 1000);
+      setFoundStudent({
+        nama: match.borrower?.displayName ?? "-",
+        nim: match.borrower?.uid ?? "-",
+        userId: match.userId,
+        loanId: match.id,
+        laptop: match.asset?.name ?? "-",
+        laptopCode: match.asset?.code ?? "-",
+        assetId: match.assetId,
+        dosenPembimbing: match.lecturer?.displayName ?? "-",
+        judulSkripsi: match.thesisTitle ?? "-",
+        abstrakSkripsi: match.thesisAbstract ?? "-",
+        tanggalPengajuan: new Date(match.createdAt).toLocaleDateString(
+          "id-ID",
+          { day: "numeric", month: "long", year: "numeric" },
+        ),
+        approvedByDosen: true,
+        approvedByKepalaLab: true,
+        whatsapp: match.borrower?.waNumber ?? "-",
+      });
+      setSearchState("found");
+    } catch (err) {
+      console.error("[handleSearch]", err);
+      setSearchState("notfound");
+      setFoundStudent(null);
+    }
   };
 
-  const handleProses = () => {
-    // Process the transaction
-    setSearchState("success");
+  // Mengaktifkan loan APPROVED yang ditemukan: update endDate (kalau laboran
+  // menyesuaikan) + transisi status ke ACTIVE. Backend akan sync Asset.status
+  // → BORROWED secara otomatis di loans.service.ts.
+  const handleProses = async () => {
+    if (!foundStudent?.loanId) return;
+    try {
+      const newEnd = new Date(`${returnDate}T${returnTime}`);
+      await fetch(
+        `${API_BASE}/api/loans/${encodeURIComponent(foundStudent.loanId)}`,
+        {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ endDate: newEnd.toISOString() }),
+        },
+      );
+      const r = await fetch(
+        `${API_BASE}/api/loans/${encodeURIComponent(foundStudent.loanId)}/status`,
+        {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "ACTIVE" }),
+        },
+      );
+      if (!r.ok) {
+        const err = (await r.json().catch(() => null)) as { message?: string } | null;
+        throw new Error(err?.message ?? `HTTP ${r.status}`);
+      }
+      setSearchState("success");
+      void fetchActiveLoans();
+    } catch (err) {
+      alert(
+        `Gagal memproses peminjaman: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
   };
 
   const handleProsesLagi = () => {
@@ -241,31 +291,93 @@ export default function Transaksi() {
     setReturnTime("16:00");
   };
 
-  const handlePraktikumIdChange = (value: string) => {
+  const handlePraktikumIdChange = async (value: string) => {
     setPraktikumIdPengguna(value);
-    // Auto-fill name when ID is entered
-    if (value.length >= 5) {
-      const student = mockStudentData[value as keyof typeof mockStudentData];
-      if (student) {
-        setPraktikumNama(student.nama);
-      } else {
-        setPraktikumNama("Mahasiswa Tidak Ditemukan");
-      }
-    } else {
+    if (value.length < 5) {
       setPraktikumNama("");
+      return;
+    }
+    // Lookup user by UID (NIM). Backend list endpoint supports search by uid.
+    try {
+      const r = await fetch(
+        `${API_BASE}/api/users?search=${encodeURIComponent(value)}`,
+        { credentials: "include" },
+      );
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = (await r.json()) as { items: BackendUser[] };
+      const match = data.items.find((u) => u.uid === value);
+      setPraktikumNama(match ? match.displayName : "Mahasiswa Tidak Ditemukan");
+    } catch {
+      setPraktikumNama("Mahasiswa Tidak Ditemukan");
     }
   };
 
-  const handlePraktikumSubmit = () => {
-    setPraktikumData({
-      idPengguna: praktikumIdPengguna,
-      nama: praktikumNama,
-      idLaptop: praktikumIdLaptop,
-      namaPraktikum: praktikumNamaPraktikum,
-      returnDate: praktikumReturnDate,
-      returnTime: praktikumReturnTime
-    });
-    setPraktikumSuccess(true);
+  // POST /api/loans untuk peminjaman praktikum (walk-in). Laboran perlu
+  // role LABORAN+ di backend supaya `userId` di body dipakai (bukan session
+  // laboran).
+  const handlePraktikumSubmit = async () => {
+    try {
+      const [usersRes, assetsRes] = await Promise.all([
+        fetch(
+          `${API_BASE}/api/users?search=${encodeURIComponent(praktikumIdPengguna)}`,
+          { credentials: "include" },
+        ),
+        fetch(`${API_BASE}/api/assets`, { credentials: "include" }),
+      ]);
+      if (!usersRes.ok) throw new Error(`Gagal cari mahasiswa: ${usersRes.status}`);
+      if (!assetsRes.ok) throw new Error(`Gagal cari laptop: ${assetsRes.status}`);
+      const usersData = (await usersRes.json()) as { items: BackendUser[] };
+      const assetsData = (await assetsRes.json()) as { items: BackendAsset[] };
+
+      const user = usersData.items.find((u) => u.uid === praktikumIdPengguna);
+      if (!user) throw new Error(`Mahasiswa dengan NIM ${praktikumIdPengguna} tidak ditemukan`);
+
+      const asset = assetsData.items.find((a) => a.code === praktikumIdLaptop);
+      if (!asset) throw new Error(`Laptop dengan kode ${praktikumIdLaptop} tidak ditemukan`);
+      if (asset.status !== "AVAILABLE") {
+        throw new Error(`Laptop ${asset.code} sedang ${asset.status.toLowerCase()}, tidak bisa dipinjam`);
+      }
+
+      const startDate = new Date();
+      const endDate = new Date(`${praktikumReturnDate}T${praktikumReturnTime}`);
+      const r = await fetch(`${API_BASE}/api/loans`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user.id,
+          assetId: asset.id,
+          type: "PRACTICUM",
+          status: "ACTIVE",
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+          notes: praktikumNamaPraktikum
+            ? `Praktikum: ${praktikumNamaPraktikum}`
+            : undefined,
+        }),
+      });
+      if (!r.ok) {
+        const err = (await r.json().catch(() => null)) as { message?: string } | null;
+        throw new Error(err?.message ?? `HTTP ${r.status}`);
+      }
+
+      setPraktikumData({
+        idPengguna: praktikumIdPengguna,
+        nama: praktikumNama,
+        idLaptop: praktikumIdLaptop,
+        namaPraktikum: praktikumNamaPraktikum,
+        returnDate: praktikumReturnDate,
+        returnTime: praktikumReturnTime,
+      });
+      setPraktikumSuccess(true);
+      void fetchActiveLoans();
+    } catch (err) {
+      alert(
+        `Gagal mencatat transaksi praktikum: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
   };
 
   const handlePraktikumBaru = () => {
@@ -358,50 +470,117 @@ export default function Transaksi() {
     window.open(`https://wa.me/${whatsapp}?text=${encodedMessage}`, '_blank');
   };
 
-  const handleMarkComplete = (id: string) => {
-    setActiveLoans(activeLoans.filter(loan => loan.id !== id));
+  // "Tandai Selesai" pada peminjaman terlambat — PATCH status ke RETURNED.
+  const handleMarkComplete = async (id: string) => {
+    const loan = activeLoans.find((l) => l.id === id);
+    if (!loan) return;
+    try {
+      const r = await fetch(
+        `${API_BASE}/api/loans/${encodeURIComponent(loan.backendId)}/status`,
+        {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "RETURNED" }),
+        },
+      );
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      void fetchActiveLoans();
+    } catch (err) {
+      alert(
+        `Gagal menandai selesai: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
   };
 
-  const handleExtensionSubmit = () => {
-    if (selectedLoanForExtension) {
-      const updatedLoans = activeLoans.map(loan => {
-        if (loan.id === selectedLoanForExtension.id) {
-          loan.batasKembali = new Date(extensionDate + 'T' + extensionTime);
-          loan.status = "normal";
-        }
-        return loan;
-      });
-      setActiveLoans(updatedLoans);
+  const handleExtensionSubmit = async () => {
+    if (!selectedLoanForExtension) return;
+    try {
+      const newEnd = new Date(`${extensionDate}T${extensionTime}`);
+      const r = await fetch(
+        `${API_BASE}/api/loans/${encodeURIComponent(selectedLoanForExtension.backendId)}`,
+        {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ endDate: newEnd.toISOString() }),
+        },
+      );
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
       setExtensionDialogOpen(false);
+      void fetchActiveLoans();
+    } catch (err) {
+      alert(
+        `Gagal memperpanjang: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
     }
   };
 
-  const handleReturnSubmit = () => {
-    if (selectedLoanForReturn) {
-      const updatedLoans = activeLoans.map(loan => {
-        if (loan.id === selectedLoanForReturn.id) {
-          loan.status = "selesai";
-          loan.kondisiPengembalian = assetCondition;
-          loan.catatanPengembalian = returnNotes;
-        }
-        return loan;
-      });
-      setActiveLoans(updatedLoans);
+  const handleReturnSubmit = async () => {
+    if (!selectedLoanForReturn) return;
+    try {
+      const noteSuffix = [
+        `Kondisi: ${assetCondition}`,
+        returnNotes ? `Catatan: ${returnNotes}` : null,
+      ]
+        .filter(Boolean)
+        .join(" | ");
+      await fetch(
+        `${API_BASE}/api/loans/${encodeURIComponent(selectedLoanForReturn.backendId)}`,
+        {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ notes: noteSuffix }),
+        },
+      );
+      const r = await fetch(
+        `${API_BASE}/api/loans/${encodeURIComponent(selectedLoanForReturn.backendId)}/status`,
+        {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "RETURNED" }),
+        },
+      );
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
       setReturnDialogOpen(false);
+      void fetchActiveLoans();
+    } catch (err) {
+      alert(
+        `Gagal mencatat pengembalian: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
     }
   };
 
-  const handleNewPerpanjangSubmit = () => {
-    if (selectedLoanForNewExtension) {
-      const updatedLoans = activeLoans.map(loan => {
-        if (loan.id === selectedLoanForNewExtension.id) {
-          loan.batasKembali = new Date(newExtensionDate + 'T' + "16:00");
-          loan.status = "normal";
-        }
-        return loan;
-      });
-      setActiveLoans(updatedLoans);
+  const handleNewPerpanjangSubmit = async () => {
+    if (!selectedLoanForNewExtension) return;
+    try {
+      const newEnd = new Date(`${newExtensionDate}T16:00`);
+      const r = await fetch(
+        `${API_BASE}/api/loans/${encodeURIComponent(selectedLoanForNewExtension.backendId)}`,
+        {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ endDate: newEnd.toISOString() }),
+        },
+      );
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
       setNewPerpanjangDialogOpen(false);
+      void fetchActiveLoans();
+    } catch (err) {
+      alert(
+        `Gagal memperpanjang: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
     }
   };
 
@@ -518,8 +697,8 @@ export default function Transaksi() {
                             <p className="font-medium">{foundStudent.nim}</p>
                           </div>
                           <div className="col-span-2">
-                            <p className="text-sm text-gray-600">Program Studi</p>
-                            <p className="font-medium">{foundStudent.programStudi}</p>
+                            <p className="text-sm text-gray-600">Tanggal Pengajuan</p>
+                            <p className="font-medium">{foundStudent.tanggalPengajuan}</p>
                           </div>
                         </div>
                       </div>

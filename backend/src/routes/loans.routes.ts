@@ -10,5 +10,6 @@ router.get("/", loansController.list);
 router.get("/:id", loansController.getById);
 router.post("/", loansController.create);
 router.patch("/:id/status", loansController.updateStatus);
+router.patch("/:id", loansController.update);
 
 export default router;

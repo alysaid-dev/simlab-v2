@@ -1,10 +1,17 @@
-import { LoanStatus, LoanType } from "@prisma/client";
+import { LoanStatus, LoanType, Prisma } from "@prisma/client";
 import { z } from "zod";
+import { prisma } from "../config/database.js";
 import { loansService } from "../services/loans.service.js";
 import { usersService } from "../services/users.service.js";
 import { hasRoleAtLeast } from "../middleware/auth.js";
 import { HttpError } from "../middleware/errorHandler.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
+import {
+  notifyLoanApprovalToDosen,
+  notifyLoanApprovedByDosenToMahasiswa,
+  notifyLoanApprovedByKalabToMahasiswa,
+  notifyLoanApprovedToLaboran,
+} from "../services/notification/index.js";
 
 const listQuery = z.object({
   skip: z.coerce.number().int().min(0).optional(),
@@ -13,13 +20,15 @@ const listQuery = z.object({
   userId: z.string().uuid().optional(),
 });
 
-// `userId` is intentionally NOT in the request body — it's resolved from the
-// authenticated session so a user cannot create a loan on behalf of someone
-// else. Admins needing that capability should use a dedicated endpoint.
+// `userId` in the body is only honored when the caller has LABORAN+ role —
+// typically laboran creating a loan on behalf of a student who came in
+// person. For ordinary users the session identity wins.
 const createBody = z.object({
+  userId: z.string().uuid().optional(),
   assetId: z.string().uuid(),
   lecturerId: z.string().uuid().optional(),
   type: z.nativeEnum(LoanType),
+  status: z.nativeEnum(LoanStatus).optional(),
   startDate: z.coerce.date(),
   endDate: z.coerce.date(),
   thesisTitle: z.string().optional(),
@@ -30,6 +39,22 @@ const createBody = z.object({
 const statusBody = z.object({
   status: z.nativeEnum(LoanStatus),
 });
+
+const updateBody = z.object({
+  endDate: z.coerce.date().optional(),
+  notes: z.string().optional(),
+});
+
+function fmtDateTime(d: Date | null | undefined): string {
+  if (!d) return "-";
+  return d.toLocaleString("id-ID", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 export const loansController = {
   list: asyncHandler(async (req, res) => {
@@ -51,14 +76,102 @@ export const loansController = {
   create: asyncHandler(async (req, res) => {
     const body = createBody.parse(req.body);
     const requester = await usersService.getByUid(req.user!.uid);
-    const loan = await loansService.create({ ...body, userId: requester.id });
+
+    // Only laboran+ may book on someone else's behalf.
+    const targetUserId =
+      body.userId && hasRoleAtLeast(req.user!, "LABORAN")
+        ? body.userId
+        : requester.id;
+
+    const { userId: _ignored, ...rest } = body;
+    const loan = await loansService.create({
+      ...rest,
+      userId: targetUserId,
+    });
+
+    // Notify dosen pembimbing that a loan awaits their approval.
+    if (loan.lecturer?.email || loan.lecturer?.waNumber) {
+      void notifyLoanApprovalToDosen(
+        {
+          email: loan.lecturer.email ?? undefined,
+          phone: loan.lecturer.waNumber ?? undefined,
+        },
+        {
+          dosenName: loan.lecturer.displayName,
+          namaMahasiswa: loan.borrower.displayName,
+          nim: loan.borrower.uid,
+        },
+      );
+    }
+
     res.status(201).json(loan);
   }),
 
   // Route guard restricts this to LABORAN / KEPALA_LAB / ADMIN / SUPER_ADMIN.
   updateStatus: asyncHandler(async (req, res) => {
     const { status } = statusBody.parse(req.body);
+    const actor = await usersService.getByUid(req.user!.uid);
     const loan = await loansService.updateStatus(req.params.id!, status);
+
+    const mahasiswaRecipient = {
+      email: loan.borrower.email ?? undefined,
+      phone: loan.borrower.waNumber ?? undefined,
+    };
+    const commonLoanParams = {
+      namaMahasiswa: loan.borrower.displayName,
+      kodeLaptop: loan.asset.code,
+      namaLaptop: loan.asset.name,
+      disetujuiOleh: actor.displayName,
+      waktuPersetujuan: fmtDateTime(new Date()),
+    };
+
+    if (status === LoanStatus.APPROVED_BY_DOSEN) {
+      void notifyLoanApprovedByDosenToMahasiswa(
+        mahasiswaRecipient,
+        commonLoanParams,
+      );
+    } else if (status === LoanStatus.APPROVED) {
+      void notifyLoanApprovedByKalabToMahasiswa(
+        mahasiswaRecipient,
+        commonLoanParams,
+      );
+
+      // Semua laboran aktif dapat notif "siap serah terima".
+      const laborans = await prisma.user.findMany({
+        where: {
+          isActive: true,
+          roles: { some: { role: { name: "LABORAN" } } },
+        },
+        select: { displayName: true, email: true, waNumber: true },
+      });
+      for (const laboran of laborans) {
+        if (!laboran.email && !laboran.waNumber) continue;
+        void notifyLoanApprovedToLaboran(
+          {
+            email: laboran.email ?? undefined,
+            phone: laboran.waNumber ?? undefined,
+          },
+          {
+            laboranName: laboran.displayName,
+            namaMahasiswa: loan.borrower.displayName,
+            nim: loan.borrower.uid,
+            kodeLaptop: loan.asset.code,
+            namaLaptop: loan.asset.name,
+          },
+        );
+      }
+    }
+
+    res.json(loan);
+  }),
+
+  // Body update — endDate (perpanjangan) & notes. Guarded to LABORAN+.
+  update: asyncHandler(async (req, res) => {
+    const body = updateBody.parse(req.body);
+    const data: Prisma.LoanUncheckedUpdateInput = {};
+    if (body.endDate !== undefined) data.endDate = body.endDate;
+    if (body.notes !== undefined) data.notes = body.notes;
+    const loan = await loansService.update(req.params.id!, data);
     res.json(loan);
   }),
 };

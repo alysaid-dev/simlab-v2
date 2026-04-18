@@ -55,6 +55,7 @@ enum LoanType {
 
 enum LoanStatus {
   PENDING
+  APPROVED_BY_DOSEN
   APPROVED
   REJECTED
   ACTIVE
@@ -76,6 +77,15 @@ enum EquipmentLoanStatus {
 enum ConsumableTransactionType {
   IN
   OUT
+}
+
+enum ReservationStatus {
+  PENDING
+  CHECKED
+  APPROVED
+  REJECTED
+  CANCELLED
+  COMPLETED
 }
 
 enum ClearanceStatus {
@@ -120,6 +130,9 @@ model User {
   consumableTransactions ConsumableTransaction[]
   clearanceLetters       ClearanceLetter[]       @relation("ClearanceOwner")
   clearanceApprovals     ClearanceLetter[]       @relation("ClearanceApprover")
+  roomReservations       RoomReservation[]       @relation("ReservationUser")
+  roomReservationChecks  RoomReservation[]       @relation("ReservationChecker")
+  roomReservationApprovals RoomReservation[]     @relation("ReservationApprover")
   digitalSignatures      DigitalSignature[]
   activityLogs           ActivityLog[]
 
@@ -231,6 +244,54 @@ model Equipment {
   @@index([status])
   @@index([laboratoryId])
   @@map("equipment")
+}
+
+// ============================================================================
+// ROOM RESERVATIONS
+// ============================================================================
+
+model Room {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  code      String   @unique
+  capacity  Int      @default(0)
+  location  String?
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  reservations RoomReservation[]
+
+  @@map("rooms")
+}
+
+model RoomReservation {
+  id                   String            @id @default(uuid()) @db.Uuid
+  userId               String            @map("user_id") @db.Uuid
+  roomId               String            @map("room_id") @db.Uuid
+  purpose              String
+  startTime            DateTime          @map("start_time")
+  endTime              DateTime          @map("end_time")
+  status               ReservationStatus @default(PENDING)
+  notes                String?           @db.Text
+  suratPermohonanPath  String?           @map("surat_permohonan_path")
+  checkedBy            String?           @map("checked_by") @db.Uuid
+  checkedAt            DateTime?         @map("checked_at")
+  approvedBy           String?           @map("approved_by") @db.Uuid
+  approvedAt           DateTime?         @map("approved_at")
+  createdAt            DateTime          @default(now()) @map("created_at")
+  updatedAt            DateTime          @updatedAt @map("updated_at")
+
+  user     User  @relation("ReservationUser", fields: [userId], references: [id], onDelete: Restrict)
+  room     Room  @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  checker  User? @relation("ReservationChecker", fields: [checkedBy], references: [id], onDelete: SetNull)
+  approver User? @relation("ReservationApprover", fields: [approvedBy], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([roomId])
+  @@index([status])
+  @@index([startTime])
+  @@map("room_reservations")
 }
 
 // ============================================================================

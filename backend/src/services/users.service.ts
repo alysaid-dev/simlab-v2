@@ -1,6 +1,42 @@
+import { EquipmentLoanStatus, LoanStatus } from "@prisma/client";
 import { prisma } from "../config/database.js";
 import { HttpError } from "../middleware/errorHandler.js";
 import type { ShibbolethUser } from "../middleware/auth.js";
+
+// Status yang dianggap masih menjadi tanggungan (belum selesai).
+// RETURNED / REJECTED / CANCELLED dianggap selesai → tidak diikutkan.
+const ACTIVE_LOAN_STATUSES: LoanStatus[] = [
+  LoanStatus.PENDING,
+  LoanStatus.APPROVED_BY_DOSEN,
+  LoanStatus.APPROVED,
+  LoanStatus.ACTIVE,
+  LoanStatus.OVERDUE,
+];
+
+const ACTIVE_EQUIPMENT_LOAN_STATUSES: EquipmentLoanStatus[] = [
+  EquipmentLoanStatus.PENDING,
+  EquipmentLoanStatus.APPROVED,
+  EquipmentLoanStatus.ACTIVE,
+  EquipmentLoanStatus.OVERDUE,
+];
+
+export interface UserObligations {
+  hasObligations: boolean;
+  details: {
+    loans: Array<{
+      id: string;
+      assetName: string;
+      status: LoanStatus;
+      endDate: Date;
+    }>;
+    equipmentLoans: Array<{
+      id: string;
+      status: EquipmentLoanStatus;
+      createdAt: Date;
+    }>;
+  };
+  message: string;
+}
 
 export const usersService = {
   /**
@@ -63,5 +99,50 @@ export const usersService = {
     });
     if (!user) throw new HttpError(404, "Pengguna tidak ditemukan");
     return user;
+  },
+
+  /**
+   * Cek tanggungan aktif (laptop loans + equipment loans yang belum selesai).
+   * Dipakai oleh endpoint /me/obligations DAN sebagai server-side guard
+   * saat create surat bebas lab supaya tidak bisa di-bypass dari frontend.
+   */
+  async getObligations(userId: string): Promise<UserObligations> {
+    const [loans, equipmentLoans] = await Promise.all([
+      prisma.loan.findMany({
+        where: {
+          userId,
+          status: { in: ACTIVE_LOAN_STATUSES },
+        },
+        orderBy: { createdAt: "desc" },
+        include: { asset: { select: { name: true } } },
+      }),
+      prisma.equipmentLoan.findMany({
+        where: {
+          userId,
+          status: { in: ACTIVE_EQUIPMENT_LOAN_STATUSES },
+        },
+        orderBy: { createdAt: "desc" },
+        select: { id: true, status: true, createdAt: true },
+      }),
+    ]);
+
+    const total = loans.length + equipmentLoans.length;
+    const hasObligations = total > 0;
+
+    return {
+      hasObligations,
+      details: {
+        loans: loans.map((l) => ({
+          id: l.id,
+          assetName: l.asset.name,
+          status: l.status,
+          endDate: l.endDate,
+        })),
+        equipmentLoans,
+      },
+      message: hasObligations
+        ? `Anda masih memiliki ${total} peminjaman aktif yang belum diselesaikan`
+        : "Tidak ada tanggungan aktif. Anda dapat mengajukan surat bebas lab.",
+    };
   },
 };
