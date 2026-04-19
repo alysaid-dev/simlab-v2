@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { env } from "../config/env.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { usersService } from "../services/users.service.js";
+import { deriveRoles } from "../middleware/auth.js";
 
 export const authController = {
   /**
@@ -30,11 +31,13 @@ export const authController = {
       affiliation: req.user.affiliation,
       orgUnitDN: req.user.orgUnitDN,
       memberOf: req.user.memberOf,
+      roles: [...deriveRoles(req.user)],
       dbUser: dbUser
         ? {
             id: dbUser.id,
             isActive: dbUser.isActive,
             createdAt: dbUser.createdAt,
+            waNumber: dbUser.waNumber,
           }
         : null,
     });

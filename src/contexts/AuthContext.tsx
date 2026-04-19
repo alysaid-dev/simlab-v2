@@ -2,6 +2,14 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
 
+export type RoleName =
+  | "SUPER_ADMIN"
+  | "ADMIN"
+  | "KEPALA_LAB"
+  | "DOSEN"
+  | "LABORAN"
+  | "STAFF";
+
 export interface AuthUser {
   uid: string;
   email: string;
@@ -9,10 +17,12 @@ export interface AuthUser {
   affiliation: string | null;
   orgUnitDN: string | null;
   memberOf: string[];
+  roles: RoleName[];
   dbUser: {
     id: string;
     isActive: boolean;
     createdAt: string;
+    waNumber: string | null;
   } | null;
 }
 

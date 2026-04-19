@@ -50,14 +50,25 @@ export const loansService = {
 
   async create(input: Prisma.LoanUncheckedCreateInput) {
     return prisma.$transaction(async (tx) => {
-      const loan = await tx.loan.create({ data: input, include: LOAN_INCLUDE });
-      // Walk-in flow: laboran langsung buat loan ACTIVE → lock asset.
-      if (loan.status === LoanStatus.ACTIVE) {
-        await tx.asset.update({
-          where: { id: loan.assetId },
-          data: { status: AssetStatus.BORROWED },
-        });
+      // Lock aset segera saat pengajuan masuk (PENDING) supaya mahasiswa lain
+      // tidak bisa pilih laptop yang sama. Release otomatis kalau loan
+      // REJECTED / CANCELLED / RETURNED via updateStatus.
+      const asset = await tx.asset.findUnique({
+        where: { id: input.assetId },
+        select: { status: true },
+      });
+      if (!asset) throw new HttpError(404, "Aset tidak ditemukan");
+      if (asset.status !== AssetStatus.AVAILABLE) {
+        throw new HttpError(
+          409,
+          "Aset tidak tersedia — sudah dipinjam atau sedang diajukan oleh peminjam lain",
+        );
       }
+      const loan = await tx.loan.create({ data: input, include: LOAN_INCLUDE });
+      await tx.asset.update({
+        where: { id: loan.assetId },
+        data: { status: AssetStatus.BORROWED },
+      });
       return loan;
     });
   },

@@ -15,6 +15,7 @@ import HabisPakai from "./pages/HabisPakai";
 import TransaksiHabisPakai from "./pages/TransaksiHabisPakai";
 import Akun from "./pages/Akun";
 import PengaturanAplikasi from "./pages/PengaturanAplikasi";
+import MonitorTransaksi from "./pages/MonitorTransaksi";
 import VerifyQR from "./pages/VerifyQR";
 import { ProtectedRoute, PublicOnlyRoute } from "./components/ProtectedRoute";
 
@@ -88,6 +89,10 @@ export const router = createBrowserRouter([
   {
     path: "/pengaturan-aplikasi",
     Component: guarded(PengaturanAplikasi),
+  },
+  {
+    path: "/monitor-transaksi",
+    Component: guarded(MonitorTransaksi),
   },
   {
     path: "/verify/:hash",

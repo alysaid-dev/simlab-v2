@@ -18,6 +18,7 @@ interface ModuleTile {
   bgColor: string;
   icon: string;
   link: string;
+  requiresRole?: "SUPER_ADMIN";
 }
 
 const modules: ModuleTile[] = [
@@ -112,6 +113,14 @@ const modules: ModuleTile[] = [
     icon: "settings",
     link: "/pengaturan-aplikasi",
   },
+  {
+    title: "Monitor Transaksi",
+    description: "Pantau & batalkan transaksi berjalan",
+    bgColor: "bg-gradient-to-br from-red-600 to-orange-500",
+    icon: "shield",
+    link: "/monitor-transaksi",
+    requiresRole: "SUPER_ADMIN",
+  },
 ];
 
 export default function Dashboard() {
@@ -122,15 +131,22 @@ export default function Dashboard() {
     ? "Memuat..."
     : user?.displayName || user?.email || user?.uid || "Tamu";
 
+  const visibleModules = useMemo(() => {
+    const isSuperAdmin = user?.roles?.includes("SUPER_ADMIN") ?? false;
+    return modules.filter(
+      (m) => !m.requiresRole || (m.requiresRole === "SUPER_ADMIN" && isSuperAdmin),
+    );
+  }, [user]);
+
   const filteredModules = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return modules;
-    return modules.filter(
+    if (!q) return visibleModules;
+    return visibleModules.filter(
       (m) =>
         m.title.toLowerCase().includes(q) ||
         m.description.toLowerCase().includes(q)
     );
-  }, [searchQuery]);
+  }, [searchQuery, visibleModules]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -200,7 +216,7 @@ export default function Dashboard() {
           {searchQuery.trim() !== "" && (
             <p className="text-center text-xs text-gray-500 mt-2">
               {filteredModules.length > 0
-                ? `Menampilkan ${filteredModules.length} dari ${modules.length} modul`
+                ? `Menampilkan ${filteredModules.length} dari ${visibleModules.length} modul`
                 : `Tidak ada modul yang cocok dengan "${searchQuery}"`}
             </p>
           )}
