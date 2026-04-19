@@ -94,17 +94,20 @@ export async function renderClearancePdf(
     stream.on("error", reject);
     doc.pipe(stream);
 
-    // Header: logo
+    // Header: logo — cap tinggi 90pt, centered horizontal. Lebar auto
+    // menyesuaikan rasio gambar sumber.
+    const logoTop = 40;
+    const logoMaxH = 90;
     if (fs.existsSync(LOGO_PATH)) {
-      // Full-width kop — pdfkit akan auto-fit tinggi sesuai rasio.
-      const pageWidth = doc.page.width - 120; // minus margins 60*2
-      doc.image(LOGO_PATH, 60, 40, { width: pageWidth });
-      // Garis horizontal di bawah kop.
-      doc.moveDown(0.5);
+      // fit: [w, h] — gambar di-scale agar muat kotak, center sumbu di x.
+      doc.image(LOGO_PATH, (doc.page.width - 200) / 2, logoTop, {
+        fit: [200, logoMaxH],
+        align: "center",
+      });
     }
 
-    // Beri ruang di bawah logo — kira-kira 110 px.
-    doc.y = 150;
+    // Mulai konten di bawah logo.
+    doc.y = logoTop + logoMaxH + 20;
 
     doc
       .font("Helvetica-Bold")
