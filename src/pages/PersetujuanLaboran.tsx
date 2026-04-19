@@ -1,10 +1,31 @@
 import { useEffect, useState } from "react";
 import { PageLayout } from "../components/PageLayout";
 import { ClipboardCheck, X, Construction, Loader2, AlertTriangle } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 type View = "peminjaman-ruangan" | "bebas-lab";
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
+
+type BackendReservationStatus =
+  | "PENDING"
+  | "CHECKED"
+  | "APPROVED"
+  | "REJECTED"
+  | "CANCELLED"
+  | "COMPLETED";
+
+interface BackendReservation {
+  id: string;
+  purpose: string;
+  startTime: string;
+  endTime: string;
+  status: BackendReservationStatus;
+  notes: string | null;
+  createdAt: string;
+  user?: { displayName: string; uid: string; email: string };
+  room?: { name: string; code: string };
+}
 
 type BackendClearanceStatus =
   | "DRAFT"
@@ -65,6 +86,8 @@ interface BebasLabRecord {
 }
 
 export default function PersetujuanLaboran() {
+  const { user } = useAuth();
+  const isSuperAdmin = user?.roles?.includes("SUPER_ADMIN") ?? false;
   const [currentView, setCurrentView] = useState<View | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showTindakanModal, setShowTindakanModal] = useState(false);
@@ -165,6 +188,101 @@ export default function PersetujuanLaboran() {
     };
   }, []);
 
+  // Reservations awaiting Laboran check (status=PENDING).
+  const [pendingReservations, setPendingReservations] = useState<
+    BackendReservation[]
+  >([]);
+  const [reservationsLoading, setReservationsLoading] = useState(true);
+  const [reservationsError, setReservationsError] = useState<string | null>(
+    null,
+  );
+
+  const fetchReservations = () => {
+    setReservationsLoading(true);
+    setReservationsError(null);
+    return fetch(`${API_BASE}/api/reservations?status=PENDING`, {
+      credentials: "include",
+    })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return (await r.json()) as {
+          items: BackendReservation[];
+          total: number;
+        };
+      })
+      .then((data) => setPendingReservations(data.items))
+      .catch((err) => {
+        setReservationsError(
+          err instanceof Error ? err.message : "Gagal memuat",
+        );
+      })
+      .finally(() => setReservationsLoading(false));
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    setReservationsLoading(true);
+    setReservationsError(null);
+    fetch(`${API_BASE}/api/reservations?status=PENDING`, {
+      credentials: "include",
+    })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return (await r.json()) as {
+          items: BackendReservation[];
+          total: number;
+        };
+      })
+      .then((data) => {
+        if (!cancelled) setPendingReservations(data.items);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setReservationsError(
+            err instanceof Error ? err.message : "Gagal memuat",
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setReservationsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleReservationAction = async (
+    id: string,
+    setuju: boolean,
+  ) => {
+    if (
+      !confirm(
+        setuju
+          ? "Setujui reservasi ini dan teruskan ke Kepala Lab?"
+          : "Tolak reservasi ini?",
+      )
+    )
+      return;
+    const status = setuju ? "CHECKED" : "REJECTED";
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/reservations/${encodeURIComponent(id)}/status`,
+        {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status }),
+        },
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      void fetchReservations();
+    } catch (err) {
+      alert(
+        `Gagal: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  };
+
   const bebasLabData: BebasLabRecord[] = pendingClearances.map((c) => ({
     id: c.id,
     tanggalPengajuan: formatDateFull(c.createdAt),
@@ -223,20 +341,97 @@ export default function PersetujuanLaboran() {
   };
 
   const renderContent = () => {
-    // Peminjaman Ruangan belum punya backend — tetap placeholder.
     if (currentView === "peminjaman-ruangan") {
-      return (
-        <div className="max-w-xl mx-auto mt-12 text-center">
-          <div className="w-[120px] h-[120px] mx-auto bg-gradient-to-br from-gray-400 to-gray-500 rounded-xl flex items-center justify-center mb-4">
-            <Construction className="w-10 h-10 text-white" />
+      if (reservationsLoading) {
+        return (
+          <div className="flex items-center gap-3 p-4 rounded-lg bg-gray-50 border border-gray-200 text-gray-700">
+            <Loader2 className="w-5 h-5 animate-spin" />
+            <span>Memuat reservasi ruangan…</span>
           </div>
-          <h2 className="font-bold text-gray-900 text-xl mb-2">
-            Fitur Segera Hadir
-          </h2>
-          <p className="text-sm text-gray-500">
-            Modul persetujuan peminjaman ruangan sedang dalam pengembangan
-            backend.
-          </p>
+        );
+      }
+      if (reservationsError) {
+        return (
+          <div className="flex items-start gap-3 p-4 rounded-lg bg-red-50 border border-red-200 text-red-800">
+            <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-medium">Gagal memuat</p>
+              <p className="text-sm">{reservationsError}</p>
+            </div>
+          </div>
+        );
+      }
+      if (pendingReservations.length === 0) {
+        return (
+          <div className="text-center py-12 text-gray-500">
+            Tidak ada reservasi menunggu pemeriksaan.
+          </div>
+        );
+      }
+      return (
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b">
+                <th className="text-left py-3 px-4 font-semibold text-gray-900">
+                  Pemohon
+                </th>
+                <th className="text-left py-3 px-4 font-semibold text-gray-900">
+                  Ruangan
+                </th>
+                <th className="text-left py-3 px-4 font-semibold text-gray-900">
+                  Waktu
+                </th>
+                <th className="text-left py-3 px-4 font-semibold text-gray-900">
+                  Keperluan
+                </th>
+                <th className="text-left py-3 px-4 font-semibold text-gray-900">
+                  Tindakan
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {pendingReservations.map((r) => (
+                <tr key={r.id} className="border-b hover:bg-gray-50">
+                  <td className="py-3 px-4">
+                    <div className="font-medium text-gray-900">
+                      {r.user?.displayName ?? "-"}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {r.user?.uid ?? "-"}
+                    </div>
+                  </td>
+                  <td className="py-3 px-4 text-gray-700">
+                    {r.room?.name ?? "-"}
+                  </td>
+                  <td className="py-3 px-4 text-sm text-gray-700">
+                    {new Date(r.startTime).toLocaleString("id-ID")}
+                    <br />
+                    s/d {new Date(r.endTime).toLocaleString("id-ID")}
+                  </td>
+                  <td className="py-3 px-4 text-gray-700 max-w-xs truncate">
+                    {r.purpose}
+                  </td>
+                  <td className="py-3 px-4">
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleReservationAction(r.id, true)}
+                        className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-sm"
+                      >
+                        Periksa & Teruskan
+                      </button>
+                      <button
+                        onClick={() => handleReservationAction(r.id, false)}
+                        className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm"
+                      >
+                        Tolak
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       );
     }
@@ -300,12 +495,16 @@ export default function PersetujuanLaboran() {
                       </button>
                     </td>
                     <td className="py-3 px-4">
-                      <button
-                        onClick={() => handleTindakanClick(record)}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-                      >
-                        Tindakan
-                      </button>
+                      {isSuperAdmin ? (
+                        <span className="text-xs text-gray-400 italic">View-only</span>
+                      ) : (
+                        <button
+                          onClick={() => handleTindakanClick(record)}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                        >
+                          Tindakan
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -544,12 +743,16 @@ export default function PersetujuanLaboran() {
                       </button>
                     </td>
                     <td className="py-3 px-4">
-                      <button
-                        onClick={() => handleTindakanClick(record)}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-                      >
-                        Tindakan
-                      </button>
+                      {isSuperAdmin ? (
+                        <span className="text-xs text-gray-400 italic">View-only</span>
+                      ) : (
+                        <button
+                          onClick={() => handleTindakanClick(record)}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                        >
+                          Tindakan
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

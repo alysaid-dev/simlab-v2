@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { PageLayout } from "../components/PageLayout";
 import { Shield, X, Loader2, AlertTriangle, Construction } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 type View = "peminjaman-laptop" | "peminjaman-ruangan" | "bebas-lab";
 
@@ -82,6 +83,8 @@ interface BebasLabRecord {
 }
 
 export default function PersetujuanKepalaLab() {
+  const { user } = useAuth();
+  const isSuperAdmin = user?.roles?.includes("SUPER_ADMIN") ?? false;
   const [currentView, setCurrentView] = useState<View | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showTindakanModal, setShowTindakanModal] = useState(false);
@@ -602,12 +605,16 @@ export default function PersetujuanKepalaLab() {
                       </button>
                     </td>
                     <td className="py-3 px-4">
-                      <button
-                        onClick={() => handleTindakanClick(record)}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-                      >
-                        Tindakan
-                      </button>
+                      {isSuperAdmin ? (
+                        <span className="text-xs text-gray-400 italic">View-only</span>
+                      ) : (
+                        <button
+                          onClick={() => handleTindakanClick(record)}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                        >
+                          Tindakan
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -848,12 +855,16 @@ export default function PersetujuanKepalaLab() {
                       </button>
                     </td>
                     <td className="py-3 px-4">
-                      <button
-                        onClick={() => handleTindakanClick(record)}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-                      >
-                        Tindakan
-                      </button>
+                      {isSuperAdmin ? (
+                        <span className="text-xs text-gray-400 italic">View-only</span>
+                      ) : (
+                        <button
+                          onClick={() => handleTindakanClick(record)}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                        >
+                          Tindakan
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -1092,12 +1103,16 @@ export default function PersetujuanKepalaLab() {
                       </button>
                     </td>
                     <td className="py-3 px-4">
-                      <button
-                        onClick={() => handleTindakanClick(record)}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-                      >
-                        Tindakan
-                      </button>
+                      {isSuperAdmin ? (
+                        <span className="text-xs text-gray-400 italic">View-only</span>
+                      ) : (
+                        <button
+                          onClick={() => handleTindakanClick(record)}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                        >
+                          Tindakan
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

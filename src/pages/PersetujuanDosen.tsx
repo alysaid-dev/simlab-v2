@@ -86,6 +86,11 @@ function statusToTindakan(status: BackendLoanStatus): string {
 export default function PersetujuanDosen() {
   const { user } = useAuth();
   const lecturerId = user?.dbUser?.id ?? null;
+  const isSuperAdmin = user?.roles?.includes("SUPER_ADMIN") ?? false;
+  // Super Admin lihat semua bimbingan (oversight). Dosen biasa: hanya miliknya.
+  const loansQuery = isSuperAdmin
+    ? `take=200`
+    : `lecturerId=${encodeURIComponent(lecturerId ?? "")}&take=200`;
   const [currentView, setCurrentView] = useState<View | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showTindakanModal, setShowTindakanModal] = useState(false);
@@ -102,7 +107,7 @@ export default function PersetujuanDosen() {
   // Hanya tampilkan permohonan yang lecturerId-nya = user yang sedang login.
   // Dosen lain tidak akan melihat bimbingan yang bukan miliknya.
   useEffect(() => {
-    if (!lecturerId) {
+    if (!lecturerId && !isSuperAdmin) {
       setLoansLoading(false);
       return;
     }
@@ -110,7 +115,7 @@ export default function PersetujuanDosen() {
     setLoansLoading(true);
     setLoansError(null);
     fetch(
-      `${API_BASE}/api/loans?lecturerId=${encodeURIComponent(lecturerId)}&take=200`,
+      `${API_BASE}/api/loans?${loansQuery}`,
       { credentials: "include" },
     )
       .then(async (r) => {
@@ -133,7 +138,7 @@ export default function PersetujuanDosen() {
     return () => {
       cancelled = true;
     };
-  }, [lecturerId]);
+  }, [lecturerId, isSuperAdmin, loansQuery]);
 
   const permohonanData: PermohonanRecord[] = allLoans
     .filter((l) => l.status === "PENDING")
@@ -150,9 +155,9 @@ export default function PersetujuanDosen() {
   const [submitting, setSubmitting] = useState(false);
 
   const refetchLoans = () => {
-    if (!lecturerId) return;
+    if (!lecturerId && !isSuperAdmin) return;
     fetch(
-      `${API_BASE}/api/loans?lecturerId=${encodeURIComponent(lecturerId)}&take=200`,
+      `${API_BASE}/api/loans?${loansQuery}`,
       { credentials: "include" },
     )
       .then(async (r) => {
@@ -283,12 +288,16 @@ export default function PersetujuanDosen() {
                       </button>
                     </td>
                     <td className="py-3 px-4">
-                      <button
-                        onClick={() => handleTindakanClick(record)}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-                      >
-                        Tindakan
-                      </button>
+                      {isSuperAdmin ? (
+                        <span className="text-xs text-gray-400 italic">View-only</span>
+                      ) : (
+                        <button
+                          onClick={() => handleTindakanClick(record)}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                        >
+                          Tindakan
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
