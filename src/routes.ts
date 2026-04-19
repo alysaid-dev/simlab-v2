@@ -1,4 +1,5 @@
 import { createBrowserRouter } from "react-router";
+import { createElement, type ComponentType } from "react";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import PeminjamanLaptop from "./pages/PeminjamanLaptop";
@@ -15,71 +16,78 @@ import TransaksiHabisPakai from "./pages/TransaksiHabisPakai";
 import Akun from "./pages/Akun";
 import PengaturanAplikasi from "./pages/PengaturanAplikasi";
 import VerifyQR from "./pages/VerifyQR";
+import { ProtectedRoute, PublicOnlyRoute } from "./components/ProtectedRoute";
+
+const guarded = (C: ComponentType) => () =>
+  createElement(ProtectedRoute, null, createElement(C));
+
+const publicOnly = (C: ComponentType) => () =>
+  createElement(PublicOnlyRoute, null, createElement(C));
 
 export const router = createBrowserRouter([
   {
     path: "/",
-    Component: Login,
+    Component: publicOnly(Login),
   },
   {
     path: "/login",
-    Component: Login,
+    Component: publicOnly(Login),
   },
   {
     path: "/dashboard",
-    Component: Dashboard,
+    Component: guarded(Dashboard),
   },
   {
     path: "/peminjaman-laptop",
-    Component: PeminjamanLaptop,
+    Component: guarded(PeminjamanLaptop),
   },
   {
     path: "/peminjaman-ruangan",
-    Component: PeminjamanRuangan,
+    Component: guarded(PeminjamanRuangan),
   },
   {
     path: "/surat-bebas-lab",
-    Component: SuratBebasLab,
+    Component: guarded(SuratBebasLab),
   },
   {
     path: "/persetujuan-dosen",
-    Component: PersetujuanDosen,
+    Component: guarded(PersetujuanDosen),
   },
   {
     path: "/persetujuan-kepala-lab",
-    Component: PersetujuanKepalaLab,
+    Component: guarded(PersetujuanKepalaLab),
   },
   {
     path: "/persetujuan-laboran",
-    Component: PersetujuanLaboran,
+    Component: guarded(PersetujuanLaboran),
   },
   {
     path: "/transaksi",
-    Component: Transaksi,
+    Component: guarded(Transaksi),
   },
   {
     path: "/peminjaman-alat",
-    Component: PeminjamanAlat,
+    Component: guarded(PeminjamanAlat),
   },
   {
     path: "/aset",
-    Component: Aset,
+    Component: guarded(Aset),
   },
   {
     path: "/habis-pakai",
-    Component: HabisPakai,
+    Component: guarded(HabisPakai),
   },
   {
     path: "/transaksi-habis-pakai",
-    Component: TransaksiHabisPakai,
+    Component: guarded(TransaksiHabisPakai),
   },
   {
     path: "/akun",
-    Component: Akun,
+    Component: guarded(Akun),
   },
   {
     path: "/pengaturan-aplikasi",
-    Component: PengaturanAplikasi,
+    Component: guarded(PengaturanAplikasi),
   },
   {
     path: "/verify/:hash",

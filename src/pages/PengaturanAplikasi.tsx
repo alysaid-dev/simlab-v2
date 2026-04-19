@@ -1,78 +1,12 @@
 import { useState } from "react";
 import { PageLayout } from "../components/PageLayout";
-import { Settings, Copy, Eye, Upload, Check, Search, Plus, Trash2, ArrowLeft, ChevronDown, X, Calendar, Info } from "lucide-react";
+import { Settings, Check, Search, Plus, Trash2, ArrowLeft, X, Calendar, Info } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
-import { Badge } from "../components/ui/badge";
 import { Card } from "../components/ui/card";
 import { Alert, AlertDescription } from "../components/ui/alert";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "../components/ui/dialog";
-import { Textarea } from "../components/ui/textarea";
-
-const defaultLetterTemplate = `<!DOCTYPE html>
-<html>
-<head>
-  <style>
-    body { font-family: 'Times New Roman', serif; margin: 40px; }
-    .header { text-align: center; margin-bottom: 30px; }
-    .logo { width: 80px; height: 80px; margin: 0 auto; }
-    .title { font-weight: bold; margin-top: 10px; }
-    .content { text-align: justify; line-height: 1.8; }
-    .signature { margin-top: 40px; }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <div class="logo">[Logo Universitas]</div>
-    <h3>LABORATORIUM STATISTIKA</h3>
-    <h4>UNIVERSITAS ISLAM INDONESIA</h4>
-    <p>Jl. Kaliurang Km. 14,5, Sleman, Yogyakarta 55584</p>
-  </div>
-  
-  <h4 style="text-align: center;">SURAT KETERANGAN BEBAS PINJAMAN</h4>
-  
-  <div class="content">
-    <p>Yang bertanda tangan di bawah ini:</p>
-    <p>Nama: {{nama_kepala_lab}}<br/>
-       Jabatan: Kepala Laboratorium Statistika</p>
-    
-    <p>Menerangkan bahwa:</p>
-    <p>Nama: {{nama_mahasiswa}}<br/>
-       NIM: {{nim}}</p>
-    
-    <p>Adalah benar mahasiswa Program Studi Statistika FMIPA UII yang telah 
-    menyelesaikan seluruh kewajiban pengembalian peminjaman barang/laptop 
-    di Laboratorium Statistika.</p>
-    
-    <p>Surat keterangan ini dibuat pada tanggal {{tanggal}} untuk dapat 
-    digunakan sebagaimana mestinya.</p>
-  </div>
-  
-  <div class="signature">
-    <p>Yogyakarta, {{tanggal}}</p>
-    <p>Kepala Laboratorium,</p>
-    <br/><br/><br/>
-    <p>{{nama_kepala_lab}}</p>
-    <p style="font-size: 12px;">Diverifikasi oleh: {{nama_laboran}}</p>
-  </div>
-</body>
-</html>`;
-
-const dynamicVariables = [
-  { name: "{{nama_mahasiswa}}", description: "Nama mahasiswa" },
-  { name: "{{nim}}", description: "NIM mahasiswa" },
-  { name: "{{tanggal}}", description: "Tanggal surat" },
-  { name: "{{nama_kepala_lab}}", description: "Nama kepala lab" },
-  { name: "{{nama_laboran}}", description: "Nama laboran" }
-];
-
-const whatsappVariables = [
-  { name: "{{nama_mahasiswa}}", description: "Nama peminjam" },
-  { name: "{{id_laptop}}", description: "ID laptop" },
-  { name: "{{batas_kembali}}", description: "Tanggal batas kembali" },
-  { name: "{{keterlambatan}}", description: "Durasi keterlambatan" }
-];
 
 interface Laboratory {
   id: number;
@@ -154,12 +88,7 @@ const mockLaboratories: Laboratory[] = [
 
 export default function PengaturanAplikasi() {
   const [activeMenu, setActiveMenu] = useState<string>("");
-  
-  // Template Surat state
-  const [letterTemplate, setLetterTemplate] = useState(defaultLetterTemplate);
-  const [previewModalOpen, setPreviewModalOpen] = useState(false);
-  const [copiedVariable, setCopiedVariable] = useState<string | null>(null);
-  
+
   // Profil Laboratorium state
   const [laboratories, setLaboratories] = useState<Laboratory[]>(mockLaboratories);
   const [labSearchQuery, setLabSearchQuery] = useState("");
@@ -172,7 +101,7 @@ export default function PengaturanAplikasi() {
   const [newLabNama, setNewLabNama] = useState("");
   const [newLabKepala, setNewLabKepala] = useState("");
   const [newLabLaboran, setNewLabLaboran] = useState("");
-  
+
   // Searchable dropdown state
   const [kepalaSearchQuery, setKepalaSearchQuery] = useState("");
   const [laboranSearchQuery, setLaboranSearchQuery] = useState("");
@@ -180,15 +109,6 @@ export default function PengaturanAplikasi() {
   const [showLaboranDropdown, setShowLaboranDropdown] = useState(false);
   const [selectedKepala, setSelectedKepala] = useState<AccountOption | null>(null);
   const [selectedLaboran, setSelectedLaboran] = useState<AccountOption | null>(null);
-  
-  // Notifikasi WhatsApp state
-  const [jatuhTempoTemplate, setJatuhTempoTemplate] = useState(
-    "Halo {{nama_mahasiswa}}, ini pengingat dari Lab Statistika UII. Laptop {{id_laptop}} yang Anda pinjam harus dikembalikan pada {{batas_kembali}}. Mohon segera dikembalikan. Terima kasih."
-  );
-  const [terlambatTemplate, setTerlambatTemplate] = useState(
-    "Halo {{nama_mahasiswa}}, laptop {{id_laptop}} yang Anda pinjam di Lab Statistika UII telah TERLAMBAT {{keterlambatan}} dari batas waktu {{batas_kembali}}. Mohon segera hubungi laboran. Terima kasih."
-  );
-  const [showNotifSuccess, setShowNotifSuccess] = useState(false);
 
   // Denda & Keterlambatan state
   const [penaltyAmount, setPenaltyAmount] = useState<number>(5000);
@@ -205,17 +125,6 @@ export default function PengaturanAplikasi() {
   ]);
   const [newHolidayDate, setNewHolidayDate] = useState("");
   const [newHolidayDescription, setNewHolidayDescription] = useState("");
-
-  const handleCopyVariable = (variable: string) => {
-    navigator.clipboard.writeText(variable);
-    setCopiedVariable(variable);
-    setTimeout(() => setCopiedVariable(null), 2000);
-  };
-
-  const handleSaveLetterTemplate = () => {
-    // Save letter template logic
-    alert("Template surat berhasil disimpan!");
-  };
 
   const handleSelectLab = (lab: Laboratory) => {
     setSelectedLab(lab);
@@ -276,11 +185,6 @@ export default function PengaturanAplikasi() {
     );
   };
 
-  const handleSaveNotifications = () => {
-    setShowNotifSuccess(true);
-    setTimeout(() => setShowNotifSuccess(false), 3000);
-  };
-
   const handleSavePenalty = () => {
     setShowPenaltySuccess(true);
     setTimeout(() => setShowPenaltySuccess(false), 3000);
@@ -306,103 +210,8 @@ export default function PengaturanAplikasi() {
     }
   };
 
-  const renderPreview = () => {
-    // Replace variables with dummy data
-    const previewHtml = letterTemplate
-      .replace(/{{nama_mahasiswa}}/g, "Ahmad Fauzan Hakim")
-      .replace(/{{nim}}/g, "20611157")
-      .replace(/{{tanggal}}/g, "26 Maret 2026")
-      .replace(/{{nama_kepala_lab}}/g, "Dr. Anggit Wibisono, M.Si")
-      .replace(/{{nama_laboran}}/g, "Budi Santoso");
-    
-    return <div dangerouslySetInnerHTML={{ __html: previewHtml }} />;
-  };
-
   const renderContent = () => {
     switch (activeMenu) {
-      case "Template Surat":
-        return (
-          <div>
-            {/* Info Box */}
-            <Alert className="mb-6 border-blue-200 bg-blue-50">
-              <AlertDescription className="text-blue-800">
-                Edit template HTML untuk Surat Keterangan Bebas Pinjaman Laboratorium. 
-                Gunakan variabel dinamis di bawah untuk menyisipkan data otomatis.
-              </AlertDescription>
-            </Alert>
-
-            {/* Dynamic Variables */}
-            <div className="mb-6">
-              <p className="text-sm font-medium text-gray-700 mb-3">
-                Klik untuk menyalin variabel:
-              </p>
-              <div className="flex flex-wrap gap-2 mb-3">
-                {dynamicVariables.map((variable) => (
-                  <button
-                    key={variable.name}
-                    onClick={() => handleCopyVariable(variable.name)}
-                    className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-md text-sm font-mono transition-colors"
-                    title={variable.description}
-                  >
-                    {copiedVariable === variable.name ? (
-                      <Check className="w-3 h-3 text-green-600" />
-                    ) : (
-                      <Copy className="w-3 h-3 text-gray-600" />
-                    )}
-                    {variable.name}
-                  </button>
-                ))}
-              </div>
-              <p className="text-xs text-gray-500">
-                Tempelkan variabel ke dalam editor HTML. Nilai akan terisi otomatis saat surat digenerate.
-              </p>
-            </div>
-
-            {/* HTML Editor */}
-            <Card className="mb-4 overflow-hidden">
-              <div className="bg-[#1e1e1e] p-4">
-                <Textarea
-                  value={letterTemplate}
-                  onChange={(e) => setLetterTemplate(e.target.value)}
-                  className="font-mono text-sm bg-[#1e1e1e] text-white border-none resize-none focus-visible:ring-0 min-h-[400px]"
-                  spellCheck={false}
-                />
-              </div>
-            </Card>
-
-            {/* Toolbar */}
-            <div className="flex gap-3">
-              <Button variant="outline" onClick={() => setPreviewModalOpen(true)}>
-                <Eye className="w-4 h-4 mr-2" />
-                Preview Surat
-              </Button>
-              <Button onClick={handleSaveLetterTemplate}>
-                Simpan Template
-              </Button>
-            </div>
-
-            {/* Preview Modal */}
-            <Dialog open={previewModalOpen} onOpenChange={setPreviewModalOpen}>
-              <DialogContent className="sm:max-w-3xl max-h-[80vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>Preview Template Surat</DialogTitle>
-                  <DialogDescription className="sr-only">
-                    Pratinjau template surat dengan data contoh
-                  </DialogDescription>
-                </DialogHeader>
-                <Card className="p-8 shadow-lg bg-white">
-                  {renderPreview()}
-                </Card>
-                <DialogFooter>
-                  <Button onClick={() => setPreviewModalOpen(false)}>
-                    Tutup
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          </div>
-        );
-
       case "Profil Laboratorium":
         // Show Edit Panel if a lab is selected
         if (selectedLab) {
@@ -593,7 +402,7 @@ export default function PengaturanAplikasi() {
 
         // Show Laboratory List (main view)
         const filteredLabs = getFilteredLaboratories();
-        
+
         return (
           <div>
             <p className="text-sm text-gray-600 mb-6">
@@ -611,7 +420,7 @@ export default function PengaturanAplikasi() {
                   className="pl-10"
                 />
               </div>
-              
+
               <Button onClick={handleAddLab}>
                 <Plus className="w-4 h-4 mr-2" />
                 Tambah Laboratorium
@@ -633,8 +442,8 @@ export default function PengaturanAplikasi() {
                   </thead>
                   <tbody className="divide-y">
                     {filteredLabs.map((lab, index) => (
-                      <tr 
-                        key={lab.id} 
+                      <tr
+                        key={lab.id}
                         className="bg-white hover:bg-gray-50 cursor-pointer"
                         onClick={() => handleSelectLab(lab)}
                       >
@@ -685,7 +494,7 @@ export default function PengaturanAplikasi() {
                       placeholder="Lab Statistika 3"
                     />
                   </div>
-                  
+
                   <div>
                     <Label htmlFor="new-kepala-lab">Nama Kepala Laboratorium</Label>
                     <Input
@@ -695,7 +504,7 @@ export default function PengaturanAplikasi() {
                       placeholder="Dr. Nama Kepala Lab"
                     />
                   </div>
-                  
+
                   <div>
                     <Label htmlFor="new-laboran">Nama Laboran</Label>
                     <Input
@@ -714,7 +523,7 @@ export default function PengaturanAplikasi() {
                   <Button variant="outline" onClick={() => setAddLabModalOpen(false)}>
                     Batal
                   </Button>
-                  <Button 
+                  <Button
                     onClick={handleSaveNewLab}
                     disabled={!newLabNama || !newLabKepala || !newLabLaboran}
                   >
@@ -723,98 +532,6 @@ export default function PengaturanAplikasi() {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-          </div>
-        );
-
-      case "Notifikasi WhatsApp":
-        return (
-          <div className="max-w-3xl">
-            {/* Info Box */}
-            <Alert className="mb-6 border-blue-200 bg-blue-50">
-              <AlertDescription className="text-blue-800">
-                Template pesan berikut digunakan saat laboran menekan tombol 'Kirim Pengingat' di modul Transaksi. 
-                Gunakan variabel dinamis untuk menyesuaikan isi pesan.
-              </AlertDescription>
-            </Alert>
-
-            {/* Variables */}
-            <div className="mb-6">
-              <p className="text-sm font-medium text-gray-700 mb-3">
-                Variabel yang tersedia:
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {whatsappVariables.map((variable) => (
-                  <Badge
-                    key={variable.name}
-                    className="bg-gray-100 text-gray-700 hover:bg-gray-100 font-mono"
-                    title={variable.description}
-                  >
-                    {variable.name}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-
-            {/* Template 1: Jatuh Tempo */}
-            <Card className="p-6 bg-gray-50 mb-4">
-              <div className="mb-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Label>Template Pesan</Label>
-                  <Badge className="bg-yellow-100 text-yellow-700 hover:bg-yellow-100">
-                    Jatuh Tempo
-                  </Badge>
-                </div>
-                <p className="text-xs text-gray-500">
-                  Dikirim saat laptop mendekati batas waktu pengembalian (H-2 hingga hari H).
-                </p>
-              </div>
-              <Textarea
-                rows={4}
-                value={jatuhTempoTemplate}
-                onChange={(e) => setJatuhTempoTemplate(e.target.value)}
-                maxLength={300}
-              />
-              <p className="text-xs text-gray-500 mt-2">
-                {jatuhTempoTemplate.length} / 300 karakter
-              </p>
-            </Card>
-
-            {/* Template 2: Terlambat */}
-            <Card className="p-6 bg-gray-50 mb-6">
-              <div className="mb-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Label>Template Pesan</Label>
-                  <Badge className="bg-red-100 text-red-700 hover:bg-red-100">
-                    Terlambat
-                  </Badge>
-                </div>
-                <p className="text-xs text-gray-500">
-                  Dikirim saat laptop telah melewati batas waktu pengembalian.
-                </p>
-              </div>
-              <Textarea
-                rows={4}
-                value={terlambatTemplate}
-                onChange={(e) => setTerlambatTemplate(e.target.value)}
-                maxLength={300}
-              />
-              <p className="text-xs text-gray-500 mt-2">
-                {terlambatTemplate.length} / 300 karakter
-              </p>
-            </Card>
-
-            <Button onClick={handleSaveNotifications} className="w-full">
-              Simpan Template Notifikasi
-            </Button>
-
-            {/* Success State */}
-            {showNotifSuccess && (
-              <Alert className="mt-4 border-green-200 bg-green-50">
-                <AlertDescription className="text-green-800">
-                  Template notifikasi WhatsApp berhasil disimpan.
-                </AlertDescription>
-              </Alert>
-            )}
           </div>
         );
 
@@ -896,7 +613,7 @@ export default function PengaturanAplikasi() {
           </div>
         );
 
-      case "Hari Libur":
+      case "Hari Libur": {
         const formatDateDisplay = (dateStr: string) => {
           const date = new Date(dateStr);
           const dayName = date.toLocaleDateString('id-ID', { weekday: 'long' });
@@ -951,8 +668,8 @@ export default function PengaturanAplikasi() {
                   </thead>
                   <tbody className="divide-y">
                     {holidays.map((holiday, index) => (
-                      <tr 
-                        key={holiday.id} 
+                      <tr
+                        key={holiday.id}
                         className="bg-white hover:bg-gray-50"
                       >
                         <td className="px-4 py-3 text-sm">{index + 1}</td>
@@ -991,6 +708,7 @@ export default function PengaturanAplikasi() {
             </Alert>
           </div>
         );
+      }
 
       default:
         return null;
@@ -1005,7 +723,7 @@ export default function PengaturanAplikasi() {
         ...(activeMenu ? [{ label: activeMenu }] : [])
       ]}
       icon={<Settings className="w-8 h-8 text-white" />}
-      sidebarItems={['Template Surat', 'Profil Laboratorium', 'Notifikasi WhatsApp', 'Denda & Keterlambatan', 'Hari Libur']}
+      sidebarItems={['Profil Laboratorium', 'Denda & Keterlambatan', 'Hari Libur']}
       onSidebarItemClick={setActiveMenu}
       activeItem={activeMenu}
       hideHeader={!activeMenu}
@@ -1016,14 +734,14 @@ export default function PengaturanAplikasi() {
           <div className="w-[150px] h-[150px] bg-gradient-to-br from-gray-600 to-slate-500 rounded-xl flex items-center justify-center mb-3">
             <Settings className="w-11 h-11 text-white" />
           </div>
-          
+
           {/* Title */}
           <h2 className="font-bold text-gray-900 text-xl mb-1">Pengaturan Aplikasi</h2>
           <p className="text-sm text-gray-500 mb-5">Konfigurasi dan Pengaturan Sistem</p>
-          
+
           {/* Button */}
           <button
-            onClick={() => setActiveMenu("Template Surat")}
+            onClick={() => setActiveMenu("Profil Laboratorium")}
             className="flex items-center gap-2 bg-blue-900 text-white px-6 py-3 rounded-lg hover:bg-blue-800 transition-colors font-medium shadow-sm hover:shadow-md"
           >
             Masuk ke Pengaturan Aplikasi
