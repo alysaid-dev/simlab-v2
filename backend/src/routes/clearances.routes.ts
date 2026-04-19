@@ -8,6 +8,7 @@ router.use(requireAuth);
 
 router.get("/", clearancesController.list);
 router.get("/:id", clearancesController.getById);
+router.get("/:id/download", clearancesController.download);
 router.post("/", clearancesController.create);
 router.patch(
   "/:id/status",

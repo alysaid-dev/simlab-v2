@@ -32,6 +32,63 @@ function deriveSignerRole(
 
 export const verifyService = {
   async verify(hash: string): Promise<VerifyResult> {
+    // Prioritas: cari di ClearanceLetter.hashLaboran / hashKepalaLab —
+    // path ini dipakai oleh Surat Bebas Lab E2E (2 QR per surat). Setiap
+    // match punya signerUid + signedAt tersendiri.
+    const clearance = await prisma.clearanceLetter.findFirst({
+      where: {
+        OR: [{ hashLaboran: hash }, { hashKepalaLab: hash }],
+      },
+      include: { user: { select: { displayName: true, uid: true } } },
+    });
+    if (clearance) {
+      const isLaboran = clearance.hashLaboran === hash;
+      const signerUid = isLaboran
+        ? clearance.signerUidLaboran
+        : clearance.signerUidKepalaLab;
+      const signedAt = isLaboran
+        ? clearance.signedAtLaboran
+        : clearance.signedAtKepalaLab;
+      if (signerUid) {
+        const signer = await prisma.user.findUnique({
+          where: { uid: signerUid },
+          include: {
+            roles: { include: { role: true } },
+            kepalaOfLabs: { select: { id: true, name: true } },
+            laboranOfLabs: {
+              include: { laboratory: { select: { id: true, name: true } } },
+            },
+          },
+        });
+        if (signer) {
+          const roleNames = signer.roles.map((r) => r.role.name);
+          const signerRole = isLaboran
+            ? "Laboran"
+            : deriveSignerRole(
+                roleNames,
+                signer.kepalaOfLabs.length > 0,
+                signer.laboranOfLabs.length > 0,
+              );
+          const laboratoryName =
+            signer.kepalaOfLabs[0]?.name ??
+            signer.laboranOfLabs[0]?.laboratory.name ??
+            null;
+          return {
+            valid: true,
+            documentType: DocumentType.CLEARANCE_LETTER,
+            documentId: clearance.id,
+            signerName: signer.displayName,
+            signerRole,
+            laboratoryName,
+            signedAt: signedAt ?? undefined,
+            studentName: clearance.user.displayName,
+            studentNim: clearance.user.uid,
+          };
+        }
+      }
+    }
+
+    // Fallback: DigitalSignature table (legacy / other document types).
     const sig = await prisma.digitalSignature.findUnique({
       where: { hash },
       include: {

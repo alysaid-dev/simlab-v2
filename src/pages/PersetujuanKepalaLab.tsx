@@ -389,18 +389,22 @@ export default function PersetujuanKepalaLab() {
     if (!selectedRecord?.id) return;
 
     // Peminjaman Laptop: loan PENDING → APPROVED/REJECTED.
-    // Bebas Lab: clearance PENDING_KEPALA_LAB → PENDING_LABORAN (setujui, lanjut
-    // ke Laboran) atau REJECTED. Ruangan: placeholder (seharusnya tidak sampai sini).
+    // Bebas Lab: clearance PENDING_KEPALA_LAB → APPROVED (final, trigger
+    // PDF generate) atau REJECTED (dengan alasan).
     const isLoan = currentView === "peminjaman-laptop";
     const endpoint = isLoan
       ? `/api/loans/${encodeURIComponent(selectedRecord.id)}/status`
       : `/api/clearances/${encodeURIComponent(selectedRecord.id)}/status`;
     const setuju = tindakanForm.tindakan === "Setujui";
+    if (!isLoan && !setuju && !tindakanForm.keterangan.trim()) {
+      alert("Alasan penolakan wajib diisi");
+      return;
+    }
     const body = isLoan
       ? { status: setuju ? "APPROVED" : "REJECTED" }
       : {
-          status: setuju ? "PENDING_LABORAN" : "REJECTED",
-          notes: tindakanForm.keterangan || undefined,
+          status: setuju ? "APPROVED" : "REJECTED",
+          rejectionReason: setuju ? undefined : tindakanForm.keterangan,
         };
 
     setSubmitting(true);
@@ -411,7 +415,10 @@ export default function PersetujuanKepalaLab() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        const err = (await res.json().catch(() => null)) as { message?: string } | null;
+        throw new Error(err?.message ?? `HTTP ${res.status}`);
+      }
       alert(
         `Permohonan dari ${selectedRecord.namaMahasiswa} telah ${
           setuju ? "disetujui" : "ditolak"

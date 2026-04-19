@@ -55,6 +55,15 @@ scheduler: {
     timezone: process.env.SCHEDULER_TZ ?? "Asia/Jakarta",
     reminderCron: process.env.SCHEDULER_REMINDER_CRON ?? "0 8 * * *",
   },
+  // Secret key untuk hash SHA-256 QR code surat bebas lab. HARUS di-set di
+  // production — fallback dev hanya supaya tidak crash lokal.
+  qrSecretKey:
+    process.env.QR_SECRET_KEY ??
+    "dev-only-insecure-qr-secret-change-me-in-production-32chars",
+  // Storage root untuk file generated (PDF surat, dll).
+  storageRoot: process.env.STORAGE_ROOT ?? "/var/www/simlab-v2/backend/storage",
+  // Base URL publik SIMLAB — dipakai di link QR verify.
+  publicBaseUrl: process.env.PUBLIC_BASE_URL ?? "https://statistics.uii.ac.id/simlab",
 } as const;
 
 export const isDev = env.nodeEnv !== "production";

@@ -265,9 +265,11 @@ export default function SuratBebasLab() {
     }
   };
 
-  const handleDownload = () => {
-    // Mock download function
-    alert("Mengunduh surat...");
+  const handleDownload = (recordId: string) => {
+    window.open(
+      `${API_BASE}/api/clearances/${encodeURIComponent(recordId)}/download`,
+      "_blank",
+    );
   };
 
   const renderContent = () => {
@@ -559,9 +561,9 @@ export default function SuratBebasLab() {
                     {record.keterangan}
                   </td>
                   <td className="py-3 px-4">
-                    {record.status === "Selesai" && record.documentPath ? (
+                    {record.status === "Selesai" ? (
                       <button
-                        onClick={handleDownload}
+                        onClick={() => handleDownload(record.id)}
                         className="flex items-center gap-2 px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
                       >
                         <Download className="w-4 h-4" />

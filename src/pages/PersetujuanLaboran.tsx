@@ -305,9 +305,14 @@ export default function PersetujuanLaboran() {
   const handleTindakanSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedRecord?.id) return;
-    // Laboran approves Bebas Lab: PENDING_LABORAN → APPROVED (setujui) or REJECTED (tolak).
-    const nextStatus =
-      tindakanForm.tindakan === "Setujui" ? "APPROVED" : "REJECTED";
+    // Laboran approve Bebas Lab: PENDING_LABORAN → PENDING_KEPALA_LAB
+    // (lanjut ke kalab). Reject: PENDING_LABORAN → REJECTED + alasan.
+    const isApprove = tindakanForm.tindakan === "Setujui";
+    const nextStatus = isApprove ? "PENDING_KEPALA_LAB" : "REJECTED";
+    if (!isApprove && !tindakanForm.keterangan.trim()) {
+      alert("Alasan penolakan wajib diisi");
+      return;
+    }
     setSubmitting(true);
     try {
       const res = await fetch(
@@ -318,11 +323,14 @@ export default function PersetujuanLaboran() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             status: nextStatus,
-            notes: tindakanForm.keterangan || undefined,
+            rejectionReason: isApprove ? undefined : tindakanForm.keterangan,
           }),
         },
       );
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        const err = (await res.json().catch(() => null)) as { message?: string } | null;
+        throw new Error(err?.message ?? `HTTP ${res.status}`);
+      }
       alert(
         `Permohonan dari ${selectedRecord.namaMahasiswa} telah ${
           tindakanForm.tindakan === "Setujui" ? "disetujui" : "ditolak"

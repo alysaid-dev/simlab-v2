@@ -413,6 +413,16 @@ model ClearanceLetter {
   documentPath String?         @map("document_path")
   qrHash       String?         @unique @map("qr_hash")
   notes        String?         @db.Text
+  tanggalSidang      DateTime? @map("tanggal_sidang")
+  rejectionReason    String?   @map("rejection_reason") @db.Text
+  nomorSurat         String?   @unique @map("nomor_surat")
+  signerUidLaboran   String?   @map("signer_uid_laboran")
+  signerUidKepalaLab String?   @map("signer_uid_kepala_lab")
+  hashLaboran        String?   @unique @map("hash_laboran")
+  hashKepalaLab      String?   @unique @map("hash_kepala_lab")
+  signedAtLaboran    DateTime? @map("signed_at_laboran")
+  signedAtKepalaLab  DateTime? @map("signed_at_kepala_lab")
+  pdfUrl             String?   @map("pdf_url")
   createdAt    DateTime        @default(now()) @map("created_at")
   updatedAt    DateTime        @updatedAt @map("updated_at")
 

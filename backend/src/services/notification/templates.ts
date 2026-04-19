@@ -910,6 +910,136 @@ ${waDetails([
 }
 
 // ---------------------------------------------------------------------------
+// Laboran — notifikasi pengajuan surat bebas lab baru dari mahasiswa
+// ---------------------------------------------------------------------------
+export interface ClearanceCreatedToLaboranParams {
+  laboranName: string;
+  namaMahasiswa: string;
+  nim: string;
+  tanggalSidang: string;
+  linkSimlab?: string;
+}
+
+export function clearanceCreatedToLaboran(p0: ClearanceCreatedToLaboranParams): NotificationTemplate {
+  const link = p0.linkSimlab ?? SIMLAB_URL;
+  const subject = '[SIMLAB] Permohonan Surat Bebas Laboratorium oleh Mahasiswa';
+  const html = emailLayout({
+    greeting: `Yth. ${p0.laboranName}`,
+    bodyHtml:
+      p('Terdapat permohonan surat keterangan bebas laboratorium yang memerlukan pemeriksaan Anda. Berikut detail permohonan:') +
+      detailTable([
+        ['Nama Mahasiswa', p0.namaMahasiswa],
+        ['NIM', p0.nim],
+        ['Tanggal Sidang', p0.tanggalSidang],
+      ]) +
+      p('Mohon lakukan pemeriksaan tanggungan mahasiswa dan berikan persetujuan melalui SIMLAB.'),
+    linkSimlab: link,
+    linkLabel: 'Periksa di SIMLAB',
+  });
+  const whatsapp = `${WA_SALAM}
+
+*Permohonan Surat Bebas Laboratorium*
+
+Yth. ${p0.laboranName},
+Terdapat permohonan surat bebas lab yang memerlukan pemeriksaan Anda.
+
+${waDetails([
+  ['👤 Mahasiswa', p0.namaMahasiswa],
+  ['🆔 NIM', p0.nim],
+  ['📅 Sidang', p0.tanggalSidang],
+])}
+
+Mohon lakukan pemeriksaan melalui SIMLAB.
+🔗 ${link}${WA_FOOTER}`;
+  return { subject, html, whatsapp };
+}
+
+// ---------------------------------------------------------------------------
+// Kepala Lab — notifikasi surat bebas lab sudah diperiksa laboran
+// ---------------------------------------------------------------------------
+export interface ClearanceCheckedToKepalaLabParams {
+  kalabName: string;
+  namaMahasiswa: string;
+  nim: string;
+  tanggalSidang: string;
+  diperiksaOleh: string;
+  linkSimlab?: string;
+}
+
+export function clearanceCheckedToKepalaLab(p0: ClearanceCheckedToKepalaLabParams): NotificationTemplate {
+  const link = p0.linkSimlab ?? SIMLAB_URL;
+  const subject = '[SIMLAB] Permohonan Surat Bebas Lab Telah Diperiksa Laboran';
+  const html = emailLayout({
+    greeting: `Yth. ${p0.kalabName}`,
+    bodyHtml:
+      p(`Permohonan surat keterangan bebas laboratorium telah diperiksa oleh <strong>${p0.diperiksaOleh}</strong> dan memerlukan persetujuan akhir Anda. Berikut detail:`) +
+      detailTable([
+        ['Nama Mahasiswa', p0.namaMahasiswa],
+        ['NIM', p0.nim],
+        ['Tanggal Sidang', p0.tanggalSidang],
+        ['Diperiksa Oleh', p0.diperiksaOleh],
+      ]) +
+      p('Mohon berikan persetujuan akhir agar surat dapat diterbitkan.'),
+    linkSimlab: link,
+    linkLabel: 'Setujui di SIMLAB',
+  });
+  const whatsapp = `${WA_SALAM}
+
+*Surat Bebas Lab Menunggu Persetujuan*
+
+Yth. ${p0.kalabName},
+Permohonan surat bebas lab telah diperiksa oleh ${p0.diperiksaOleh} dan memerlukan persetujuan akhir Anda.
+
+${waDetails([
+  ['👤 Mahasiswa', p0.namaMahasiswa],
+  ['🆔 NIM', p0.nim],
+  ['📅 Sidang', p0.tanggalSidang],
+])}
+
+🔗 ${link}${WA_FOOTER}`;
+  return { subject, html, whatsapp };
+}
+
+// ---------------------------------------------------------------------------
+// Mahasiswa — permohonan surat bebas lab ditolak
+// ---------------------------------------------------------------------------
+export interface ClearanceRejectedParams {
+  namaMahasiswa: string;
+  alasan: string;
+  ditolakOleh: string;
+  tahap: 'Laboran' | 'Kepala Laboratorium';
+  linkSimlab?: string;
+}
+
+export function clearanceRejectedToMahasiswa(p0: ClearanceRejectedParams): NotificationTemplate {
+  const link = p0.linkSimlab ?? SIMLAB_URL;
+  const subject = '[SIMLAB] Permohonan Surat Bebas Lab Ditolak';
+  const html = emailLayout({
+    greeting: `Yth. ${p0.namaMahasiswa}`,
+    bodyHtml:
+      p(`Mohon maaf, permohonan surat keterangan bebas laboratorium Anda <strong>ditolak</strong> oleh ${p0.tahap} (${p0.ditolakOleh}).`) +
+      detailTable([
+        ['Alasan Penolakan', p0.alasan],
+      ]) +
+      p('Silakan perbaiki atau konfirmasi terkait alasan di atas, lalu ajukan kembali melalui SIMLAB jika diperlukan.'),
+    linkSimlab: link,
+    linkLabel: 'Buka SIMLAB',
+  });
+  const whatsapp = `${WA_SALAM}
+
+*Permohonan Surat Bebas Lab Ditolak*
+
+Yth. ${p0.namaMahasiswa},
+Mohon maaf, permohonan surat bebas lab Anda *ditolak* oleh ${p0.tahap} (${p0.ditolakOleh}).
+
+Alasan: ${p0.alasan}
+
+Silakan perbaiki dan ajukan kembali melalui SIMLAB bila diperlukan.
+🔗 ${link}${WA_FOOTER}`;
+  return { subject, html, whatsapp };
+}
+
+// ---------------------------------------------------------------------------
 // Mahasiswa — permohonan dibatalkan oleh Super Admin (sistem)
 // ---------------------------------------------------------------------------
 export interface CancelledBySystemParams {

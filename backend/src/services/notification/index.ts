@@ -30,10 +30,17 @@ export interface ChannelResults {
   whatsapp: NotifyResult;
 }
 
+export interface EmailAttachment {
+  filename: string;
+  path: string;
+  contentType?: string;
+}
+
 export interface SendEmailInput {
   to: string;
   subject: string;
   html: string;
+  attachments?: EmailAttachment[];
 }
 
 export interface SendWhatsAppInput {
@@ -83,6 +90,7 @@ async function sendOne(
 async function dispatch(
   recipient: Recipient,
   tpl: t.NotificationTemplate,
+  attachments?: EmailAttachment[],
 ): Promise<ChannelResults> {
   const channels = recipient.channels ?? ['email', 'whatsapp'];
   const wantEmail = channels.includes('email');
@@ -94,7 +102,7 @@ async function dispatch(
       recipient.email,
       'email',
       transports.sendEmail
-        ? () => transports.sendEmail!({ to: recipient.email!, subject: tpl.subject, html: tpl.html })
+        ? () => transports.sendEmail!({ to: recipient.email!, subject: tpl.subject, html: tpl.html, attachments })
         : undefined,
     ),
     sendOne(
@@ -201,8 +209,30 @@ export async function notifyClearanceCheckedToMahasiswa(
 export async function notifyClearanceIssuedToMahasiswa(
   recipient: Recipient,
   params: t.ClearanceIssuedToMahasiswaParams,
+  attachments?: EmailAttachment[],
 ): Promise<ChannelResults> {
-  return dispatch(recipient, t.clearanceIssuedToMahasiswa(params));
+  return dispatch(recipient, t.clearanceIssuedToMahasiswa(params), attachments);
+}
+
+export async function notifyClearanceCreatedToLaboran(
+  recipient: Recipient,
+  params: t.ClearanceCreatedToLaboranParams,
+): Promise<ChannelResults> {
+  return dispatch(recipient, t.clearanceCreatedToLaboran(params));
+}
+
+export async function notifyClearanceCheckedToKepalaLab(
+  recipient: Recipient,
+  params: t.ClearanceCheckedToKepalaLabParams,
+): Promise<ChannelResults> {
+  return dispatch(recipient, t.clearanceCheckedToKepalaLab(params));
+}
+
+export async function notifyClearanceRejectedToMahasiswa(
+  recipient: Recipient,
+  params: t.ClearanceRejectedParams,
+): Promise<ChannelResults> {
+  return dispatch(recipient, t.clearanceRejectedToMahasiswa(params));
 }
 
 export async function notifyLoanReminderH2ToMahasiswa(

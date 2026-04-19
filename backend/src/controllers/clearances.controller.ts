@@ -1,15 +1,22 @@
 import { ClearanceStatus } from "@prisma/client";
 import { z } from "zod";
+import { prisma } from "../config/database.js";
 import { clearancesService } from "../services/clearances.service.js";
 import { usersService } from "../services/users.service.js";
 import { hasRoleAtLeast } from "../middleware/auth.js";
 import { HttpError } from "../middleware/errorHandler.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import {
-  notifyClearanceCreatedToMahasiswa,
+  notifyClearanceCheckedToKepalaLab,
   notifyClearanceCheckedToMahasiswa,
+  notifyClearanceCreatedToLaboran,
+  notifyClearanceCreatedToMahasiswa,
   notifyClearanceIssuedToMahasiswa,
+  notifyClearanceRejectedToMahasiswa,
 } from "../services/notification/index.js";
+import { fmtTanggalID } from "../services/clearancePdf.service.js";
+import * as fs from "node:fs";
+import * as path from "node:path";
 
 const listQuery = z.object({
   skip: z.coerce.number().int().min(0).optional(),
@@ -18,30 +25,37 @@ const listQuery = z.object({
   userId: z.string().uuid().optional(),
 });
 
-// `userId` resolved from session — never trust client-provided owner.
 const createBody = z.object({
   notes: z.string().optional(),
-  // Free-form sidang date for templates; not persisted on the model itself.
   tanggalSidang: z.string().optional(),
 });
 
+// Transisi yang valid dari laboran/kalab:
+//   PENDING_LABORAN  → PENDING_KEPALA_LAB  (laboran approve)
+//   PENDING_LABORAN  → REJECTED            (laboran tolak)
+//   PENDING_KEPALA_LAB → APPROVED          (kalab approve → generate PDF)
+//   PENDING_KEPALA_LAB → REJECTED          (kalab tolak)
 const statusBody = z.object({
   status: z.nativeEnum(ClearanceStatus),
-  notes: z.string().optional(),
-  // Optional context for templates that include it.
-  tanggalSidang: z.string().optional(),
-  nomorSurat: z.string().optional(),
-  penandatangan1: z.string().optional(),
-  penandatangan2: z.string().optional(),
+  rejectionReason: z.string().optional(),
 });
 
-function fmtDate(d: Date | string | undefined): string {
+function tanggalSidangStr(d: Date | null | undefined): string {
   if (!d) return "-";
-  const dt = typeof d === "string" ? new Date(d) : d;
-  return dt.toLocaleDateString("id-ID", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
+  return fmtTanggalID(d);
+}
+
+async function findAllLaboran() {
+  return prisma.user.findMany({
+    where: { isActive: true, roles: { some: { role: { name: "LABORAN" } } } },
+    select: { displayName: true, email: true, waNumber: true },
+  });
+}
+
+async function findAllKepalaLab() {
+  return prisma.user.findMany({
+    where: { isActive: true, roles: { some: { role: { name: "KEPALA_LAB" } } } },
+    select: { displayName: true, email: true, waNumber: true },
   });
 }
 
@@ -66,9 +80,7 @@ export const clearancesController = {
     const body = createBody.parse(req.body);
     const requester = await usersService.getByUid(req.user!.uid);
 
-    // Server-side guard: tolak bila masih ada peminjaman aktif. Frontend
-    // juga cek ini lewat /users/me/obligations, tapi guard di sini
-    // memastikan tidak bisa di-bypass dari client.
+    // Server-side guard: tolak bila masih ada peminjaman aktif.
     const obligations = await usersService.getObligations(requester.id);
     if (obligations.hasObligations) {
       throw new HttpError(
@@ -78,20 +90,42 @@ export const clearancesController = {
       );
     }
 
+    const tanggalSidang = body.tanggalSidang
+      ? new Date(body.tanggalSidang)
+      : undefined;
+
     const letter = await clearancesService.create({
       userId: requester.id,
       notes: body.notes,
+      tanggalSidang,
     });
 
-    // Fire-and-forget — don't block the response on transport latency.
+    const tglStr = tanggalSidangStr(tanggalSidang ?? null);
+
+    // Notif ke mahasiswa (konfirmasi pengajuan).
     void notifyClearanceCreatedToMahasiswa(
       { email: requester.email, phone: requester.waNumber ?? undefined },
       {
         namaMahasiswa: requester.displayName,
         nim: requester.uid,
-        tanggalSidang: body.tanggalSidang ?? "-",
-      }
+        tanggalSidang: tglStr,
+      },
     );
+
+    // Notif ke SEMUA laboran aktif — pemeriksaan tanggungan.
+    const laborans = await findAllLaboran();
+    for (const l of laborans) {
+      if (!l.email && !l.waNumber) continue;
+      void notifyClearanceCreatedToLaboran(
+        { email: l.email ?? undefined, phone: l.waNumber ?? undefined },
+        {
+          laboranName: l.displayName,
+          namaMahasiswa: requester.displayName,
+          nim: requester.uid,
+          tanggalSidang: tglStr,
+        },
+      );
+    }
 
     res.status(201).json(letter);
   }),
@@ -100,43 +134,129 @@ export const clearancesController = {
   updateStatus: asyncHandler(async (req, res) => {
     const body = statusBody.parse(req.body);
     const approver = await usersService.getByUid(req.user!.uid);
-    const letter = await clearancesService.updateStatus(
-      req.params.id!,
-      body.status,
-      approver.id
-    );
-
-    const owner = letter.user;
+    const current = await clearancesService.getById(req.params.id!);
+    const owner = current.user;
     const recipient = {
       email: owner.email,
       phone: owner.waNumber ?? undefined,
     };
+    const tglStr = tanggalSidangStr(current.tanggalSidang);
 
-    // Pick the right template based on the new status.
-    if (body.status === ClearanceStatus.APPROVED) {
-      void notifyClearanceIssuedToMahasiswa(recipient, {
-        namaMahasiswa: owner.displayName,
-        nim: owner.uid,
-        tanggalSidang: body.tanggalSidang ?? fmtDate(letter.approvedAt ?? undefined),
-        nomorSurat: body.nomorSurat ?? "-",
-        penandatangan1: body.penandatangan1 ?? approver.displayName,
-        penandatangan2: body.penandatangan2 ?? "-",
-      });
-    } else if (
-      body.status === ClearanceStatus.PENDING_LECTURER ||
-      body.status === ClearanceStatus.PENDING_KEPALA_LAB ||
-      body.status === ClearanceStatus.PENDING_LABORAN ||
-      body.status === ClearanceStatus.SUBMITTED
-    ) {
+    if (body.status === ClearanceStatus.PENDING_KEPALA_LAB) {
+      // Tahap 1: Laboran approve → PENDING_KEPALA_LAB.
+      if (current.status !== ClearanceStatus.PENDING_LABORAN) {
+        throw new HttpError(409, "Transisi tidak valid — surat tidak menunggu laboran");
+      }
+      const letter = await clearancesService.approveByLaboran(
+        current.id,
+        approver.uid,
+      );
+
+      // Notif mahasiswa — sudah diperiksa laboran.
       void notifyClearanceCheckedToMahasiswa(recipient, {
         namaMahasiswa: owner.displayName,
         nim: owner.uid,
-        tanggalSidang: body.tanggalSidang ?? "-",
+        tanggalSidang: tglStr,
         diperiksaOleh: approver.displayName,
       });
-    }
-    // REJECTED / DRAFT have no dedicated template — no notification fired.
 
-    res.json(letter);
+      // Notif semua kepala lab.
+      const kalabs = await findAllKepalaLab();
+      for (const k of kalabs) {
+        if (!k.email && !k.waNumber) continue;
+        void notifyClearanceCheckedToKepalaLab(
+          { email: k.email ?? undefined, phone: k.waNumber ?? undefined },
+          {
+            kalabName: k.displayName,
+            namaMahasiswa: owner.displayName,
+            nim: owner.uid,
+            tanggalSidang: tglStr,
+            diperiksaOleh: approver.displayName,
+          },
+        );
+      }
+
+      res.json(letter);
+      return;
+    }
+
+    if (body.status === ClearanceStatus.APPROVED) {
+      // Tahap 2: Kepala Lab approve → APPROVED + generate PDF.
+      if (current.status !== ClearanceStatus.PENDING_KEPALA_LAB) {
+        throw new HttpError(409, "Transisi tidak valid — surat belum diperiksa laboran");
+      }
+      const letter = await clearancesService.approveByKepalaLab(
+        current.id,
+        approver.uid,
+        approver.id,
+      );
+
+      // Email + PDF attachment.
+      if (letter.pdfUrl && fs.existsSync(letter.pdfUrl)) {
+        void notifyClearanceIssuedToMahasiswa(
+          recipient,
+          {
+            namaMahasiswa: owner.displayName,
+            nim: owner.uid,
+            tanggalSidang: tglStr,
+            nomorSurat: letter.nomorSurat ?? "-",
+            penandatangan1: approver.displayName,
+            penandatangan2: letter.signerUidLaboran ?? "-",
+          },
+          [
+            {
+              filename: `SuratBebasLab-${owner.uid}.pdf`,
+              path: letter.pdfUrl,
+              contentType: "application/pdf",
+            },
+          ],
+        );
+      } else {
+        void notifyClearanceIssuedToMahasiswa(recipient, {
+          namaMahasiswa: owner.displayName,
+          nim: owner.uid,
+          tanggalSidang: tglStr,
+          nomorSurat: letter.nomorSurat ?? "-",
+          penandatangan1: approver.displayName,
+          penandatangan2: "-",
+        });
+      }
+
+      res.json(letter);
+      return;
+    }
+
+    if (body.status === ClearanceStatus.REJECTED) {
+      const tahap: "Laboran" | "Kepala Laboratorium" =
+        current.status === ClearanceStatus.PENDING_LABORAN
+          ? "Laboran"
+          : "Kepala Laboratorium";
+      const letter = await clearancesService.reject(
+        current.id,
+        body.rejectionReason,
+      );
+      void notifyClearanceRejectedToMahasiswa(recipient, {
+        namaMahasiswa: owner.displayName,
+        alasan: body.rejectionReason ?? "-",
+        ditolakOleh: approver.displayName,
+        tahap,
+      });
+      res.json(letter);
+      return;
+    }
+
+    throw new HttpError(400, "Status tujuan tidak didukung pada endpoint ini");
+  }),
+
+  download: asyncHandler(async (req, res) => {
+    const letter = await clearancesService.getById(req.params.id!);
+    const requester = await usersService.getByUid(req.user!.uid);
+    const isOwner = letter.userId === requester.id;
+    if (!isOwner && !hasRoleAtLeast(req.user!, "LABORAN")) {
+      throw new HttpError(403, "Anda tidak berhak mengunduh surat ini");
+    }
+    const pdfPath = await clearancesService.ensurePdf(letter.id);
+    const filename = `SuratBebasLab-${letter.user.uid}-${letter.nomorSurat?.replace(/\//g, "-") ?? letter.id}.pdf`;
+    res.download(path.resolve(pdfPath), filename);
   }),
 };

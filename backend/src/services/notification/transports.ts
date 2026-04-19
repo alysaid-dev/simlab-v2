@@ -38,6 +38,11 @@ export async function sendEmail(input: SendEmailInput): Promise<boolean> {
     to: input.to,
     subject: input.subject,
     html: input.html,
+    attachments: input.attachments?.map((a) => ({
+      filename: a.filename,
+      path: a.path,
+      contentType: a.contentType,
+    })),
   });
   return true;
 }
