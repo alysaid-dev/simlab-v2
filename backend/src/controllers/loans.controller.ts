@@ -7,12 +7,14 @@ import { hasRoleAtLeast } from "../middleware/auth.js";
 import { HttpError } from "../middleware/errorHandler.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import {
+  notifyCancelledBySystemToMahasiswa,
   notifyLoanApprovalToDosen,
   notifyLoanApprovedByDosenToMahasiswa,
   notifyLoanApprovedByKalabToMahasiswa,
   notifyLoanApprovedToLaboran,
   notifyLoanCreatedToMahasiswa,
 } from "../services/notification/index.js";
+import { deriveRoles } from "../middleware/auth.js";
 
 const listQuery = z.object({
   skip: z.coerce.number().int().min(0).optional(),
@@ -194,6 +196,18 @@ export const loansController = {
             namaLaptop: loan.asset.name,
           },
         );
+      }
+    } else if (status === LoanStatus.CANCELLED) {
+      // Super Admin membatalkan via Monitor Transaksi — kirim notifikasi
+      // khusus "Permohonan Dibatalkan Oleh Sistem". Kalau yang batalkan
+      // bukan super admin (mis. owner sendiri), skip — tidak perlu notif.
+      const callerRoles = deriveRoles(req.user!);
+      if (callerRoles.has("SUPER_ADMIN")) {
+        void notifyCancelledBySystemToMahasiswa(mahasiswaRecipient, {
+          namaMahasiswa: loan.borrower.displayName,
+          namaModul: "Peminjaman Laptop",
+          waktuPembatalan: fmtDateTime(new Date()),
+        });
       }
     } else if (status === LoanStatus.REJECTED) {
       // Penolakan — tentukan siapa yang nolak berdasarkan status SEBELUM

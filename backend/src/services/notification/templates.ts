@@ -908,3 +908,43 @@ ${waDetails([
 ⚠️ Denda ${denda}/hari terus berjalan hingga laptop dikembalikan. Mohon segera mengembalikan ke laboratorium.${WA_FOOTER}`;
   return { subject, html, whatsapp };
 }
+
+// ---------------------------------------------------------------------------
+// Mahasiswa — permohonan dibatalkan oleh Super Admin (sistem)
+// ---------------------------------------------------------------------------
+export interface CancelledBySystemParams {
+  namaMahasiswa: string;
+  namaModul: string;
+  waktuPembatalan: string;
+  kontak?: string;
+  linkSimlab?: string;
+}
+
+export function cancelledBySystemToMahasiswa(p0: CancelledBySystemParams): NotificationTemplate {
+  const link = p0.linkSimlab ?? SIMLAB_URL;
+  const subject = '[SIMLAB] Permohonan Dibatalkan Oleh Sistem';
+  const kontakLine = p0.kontak
+    ? p(`Silakan konfirmasi melalui nomor atau email berikut: <strong>${p0.kontak}</strong>.`)
+    : p('Silakan konfirmasi melalui nomor atau email ini.');
+  const html = emailLayout({
+    greeting: `Yth. ${p0.namaMahasiswa}`,
+    bodyHtml:
+      p(
+        `Permohonan Anda melalui <strong>${p0.namaModul}</strong> telah dibatalkan oleh sistem pada <strong>${p0.waktuPembatalan}</strong>.`,
+      ) +
+      kontakLine,
+    linkSimlab: link,
+    linkLabel: 'Buka SIMLAB',
+  });
+  const whatsapp = `${WA_SALAM}
+
+*Permohonan Dibatalkan Oleh Sistem*
+
+Yth. ${p0.namaMahasiswa},
+
+Permohonan Anda melalui *${p0.namaModul}* dibatalkan oleh sistem pada ${p0.waktuPembatalan}.
+
+Silakan konfirmasi melalui nomor atau email ini${p0.kontak ? `: ${p0.kontak}` : ''}.${WA_FOOTER}`;
+  return { subject, html, whatsapp };
+}
+

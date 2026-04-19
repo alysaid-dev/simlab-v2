@@ -218,3 +218,10 @@ export async function notifyLoanOverdueToMahasiswa(
 ): Promise<ChannelResults> {
   return dispatch(recipient, t.loanOverdueToMahasiswa(params));
 }
+
+export async function notifyCancelledBySystemToMahasiswa(
+  recipient: Recipient,
+  params: t.CancelledBySystemParams,
+): Promise<ChannelResults> {
+  return dispatch(recipient, t.cancelledBySystemToMahasiswa(params));
+}
