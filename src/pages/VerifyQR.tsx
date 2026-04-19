@@ -4,7 +4,7 @@ import { CheckCircle2, XCircle, Loader2, ShieldAlert } from "lucide-react";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Alert, AlertDescription } from "../components/ui/alert";
-import logoImage from "@/assets/logo-statistika.png";
+import logoImage from "@/assets/logo-atas-surat.png";
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
 
