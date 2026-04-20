@@ -37,6 +37,7 @@ function createApp(): Express {
       allowedHeaders: [
         "Content-Type",
         "Authorization",
+        "X-HTTP-Method-Override",
         // Shibboleth attributes forwarded by Nginx
         "uid",
         "mail",
@@ -47,6 +48,21 @@ function createApp(): Express {
       ],
     })
   );
+
+  // Cloudflare WAF di statistics.uii.ac.id memblokir method PATCH dengan 403.
+  // Workaround: frontend kirim POST + header X-HTTP-Method-Override, middleware
+  // ini rewrite req.method sebelum router cocokkan. DELETE ikut di-whitelist
+  // untuk amannya (belum terkonfirmasi diblok, tapi pola override-nya sama).
+  const METHOD_OVERRIDE_WHITELIST = new Set(["PATCH", "DELETE"]);
+  app.use((req, _res, next) => {
+    if (req.method === "POST") {
+      const override = req.header("x-http-method-override")?.toUpperCase();
+      if (override && METHOD_OVERRIDE_WHITELIST.has(override)) {
+        req.method = override;
+      }
+    }
+    next();
+  });
 
   app.use(morgan(isDev ? "dev" : "combined"));
   app.use(express.json({ limit: "2mb" }));
