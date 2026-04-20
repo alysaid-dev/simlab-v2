@@ -191,6 +191,14 @@ export const clearancesController = {
         approver.id,
       );
 
+      // Resolve laboran displayName — letter hanya menyimpan UID-nya.
+      const laboranName = letter.signerUidLaboran
+        ? await usersService
+            .getByUid(letter.signerUidLaboran)
+            .then((u) => u.displayName)
+            .catch(() => letter.signerUidLaboran!)
+        : "-";
+
       // Email + PDF attachment.
       if (letter.pdfUrl && fs.existsSync(letter.pdfUrl)) {
         void notifyClearanceIssuedToMahasiswa(
@@ -201,7 +209,7 @@ export const clearancesController = {
             tanggalSidang: tglStr,
             nomorSurat: letter.nomorSurat ?? "-",
             penandatangan1: approver.displayName,
-            penandatangan2: letter.signerUidLaboran ?? "-",
+            penandatangan2: laboranName,
           },
           [
             {
@@ -218,7 +226,7 @@ export const clearancesController = {
           tanggalSidang: tglStr,
           nomorSurat: letter.nomorSurat ?? "-",
           penandatangan1: approver.displayName,
-          penandatangan2: "-",
+          penandatangan2: laboranName,
         });
       }
 
