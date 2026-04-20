@@ -14,6 +14,7 @@ interface BackendAsset {
   id: string;
   name: string;
   code: string;
+  description: string | null;
   condition: BackendAssetCondition;
   status: BackendAssetStatus;
 }
@@ -499,9 +500,14 @@ export default function PeminjamanLaptop() {
                           {conditionLabel[selectedAsset.condition]}
                         </span>
                       </div>
-                      <div className="text-sm text-blue-900">
+                      <div className="text-sm font-medium text-blue-900">
                         {selectedAsset.name}
                       </div>
+                      {selectedAsset.description && (
+                        <div className="mt-2 text-sm text-blue-900/80 whitespace-pre-wrap">
+                          {selectedAsset.description}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

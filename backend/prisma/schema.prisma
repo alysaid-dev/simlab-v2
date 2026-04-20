@@ -22,11 +22,11 @@ datasource db {
 
 enum RoleName {
   SUPER_ADMIN
-  ADMIN
   KEPALA_LAB
   DOSEN
   LABORAN
   STAFF
+  MAHASISWA
 }
 
 enum AssetCondition {
@@ -212,6 +212,7 @@ model Asset {
   id           String         @id @default(uuid()) @db.Uuid
   name         String
   code         String         @unique
+  description  String?
   condition    AssetCondition @default(GOOD)
   status       AssetStatus    @default(AVAILABLE)
   qrHash       String?        @unique @map("qr_hash")

@@ -13,6 +13,7 @@ const listQuery = z.object({
 const createBody = z.object({
   name: z.string().min(1),
   code: z.string().min(1),
+  description: z.string().trim().optional().nullable(),
   condition: z.nativeEnum(AssetCondition).optional(),
   status: z.nativeEnum(AssetStatus).optional(),
   qrHash: z.string().optional(),

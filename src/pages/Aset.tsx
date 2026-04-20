@@ -10,12 +10,15 @@ import { Alert, AlertDescription } from "../components/ui/alert";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "../components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Textarea } from "../components/ui/textarea";
+import { apiFetch } from "@/lib/apiFetch";
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
 
 interface Asset {
+  dbId: string;
   id: string;
   nama: string;
+  deskripsi: string;
   kondisi: "Baik" | "Cukup" | "Rusak";
   status: "Tersedia" | "Dipinjam" | "Maintenance";
   maintenanceSejak?: string;
@@ -28,6 +31,7 @@ interface BackendAsset {
   id: string;
   name: string;
   code: string;
+  description: string | null;
   condition: BackendAssetCondition;
   status: BackendAssetStatus;
   qrHash: string | null;
@@ -58,12 +62,20 @@ const statusMap: Record<BackendAssetStatus, Asset["status"]> = {
 
 function transformAsset(be: BackendAsset): Asset {
   return {
+    dbId: be.id,
     id: be.code,
     nama: be.name,
+    deskripsi: be.description ?? "",
     kondisi: conditionMap[be.condition],
     status: statusMap[be.status],
   };
 }
+
+const conditionToBackend: Record<Asset["kondisi"], BackendAssetCondition> = {
+  Baik: "GOOD",
+  Cukup: "MINOR_DAMAGE",
+  Rusak: "MAJOR_DAMAGE",
+};
 
 interface BorrowingHistory {
   no: number;
@@ -206,15 +218,37 @@ export default function Aset() {
     setAddModalOpen(true);
   };
 
-  const handleSaveNewAsset = () => {
-    const newAsset: Asset = {
-      id: formId,
-      nama: formNama,
-      kondisi: formKondisi,
-      status: "Tersedia"
-    };
-    setAssets([...assets, newAsset]);
-    setAddModalOpen(false);
+  const [saving, setSaving] = useState(false);
+
+  const handleSaveNewAsset = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/assets`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: formId,
+          name: formNama,
+          condition: conditionToBackend[formKondisi],
+          description: formDeskripsi.trim() || null,
+        }),
+      });
+      if (!res.ok) {
+        const err = (await res.json().catch(() => null)) as { message?: string } | null;
+        throw new Error(err?.message ?? `HTTP ${res.status}`);
+      }
+      const created = (await res.json()) as BackendAsset;
+      setAssets((prev) => [transformAsset(created), ...prev]);
+      setAddModalOpen(false);
+    } catch (err) {
+      alert(
+        `Gagal menyimpan aset: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleEditAsset = (asset: Asset) => {
@@ -222,64 +256,121 @@ export default function Aset() {
     setFormId(asset.id);
     setFormNama(asset.nama);
     setFormKondisi(asset.kondisi);
-    setFormDeskripsi("");
+    setFormDeskripsi(asset.deskripsi);
     setEditModalOpen(true);
   };
 
-  const handleSaveEditAsset = () => {
-    if (selectedAsset) {
-      const updatedAssets = assets.map(asset => {
-        if (asset.id === selectedAsset.id) {
-          return {
-            ...asset,
-            nama: formNama,
-            kondisi: formKondisi
-          };
-        }
-        return asset;
-      });
-      setAssets(updatedAssets);
+  const handleSaveEditAsset = async () => {
+    if (!selectedAsset || saving) return;
+    setSaving(true);
+    try {
+      const res = await apiFetch(
+        `${API_BASE}/api/assets/${selectedAsset.dbId}`,
+        {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: formNama,
+            condition: conditionToBackend[formKondisi],
+            description: formDeskripsi.trim() || null,
+          }),
+        },
+      );
+      if (!res.ok) {
+        const err = (await res.json().catch(() => null)) as { message?: string } | null;
+        throw new Error(err?.message ?? `HTTP ${res.status}`);
+      }
+      const updated = (await res.json()) as BackendAsset;
+      setAssets((prev) =>
+        prev.map((a) => (a.dbId === selectedAsset.dbId ? transformAsset(updated) : a)),
+      );
       setEditModalOpen(false);
       setSelectedAsset(null);
+    } catch (err) {
+      alert(
+        `Gagal menyimpan perubahan: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleSetMaintenance = (asset: Asset) => {
-    const updatedAssets = assets.map(a => {
-      if (a.id === asset.id) {
-        return {
-          ...a,
-          status: "Maintenance" as const,
-          maintenanceSejak: new Date().toLocaleDateString("id-ID", {
-            day: "numeric",
-            month: "long",
-            year: "numeric"
-          })
-        };
-      }
-      return a;
+  const patchAssetStatus = async (
+    asset: Asset,
+    backendStatus: BackendAssetStatus,
+  ) => {
+    const res = await apiFetch(`${API_BASE}/api/assets/${asset.dbId}`, {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: backendStatus }),
     });
-    setAssets(updatedAssets);
+    if (!res.ok) {
+      const err = (await res.json().catch(() => null)) as { message?: string } | null;
+      throw new Error(err?.message ?? `HTTP ${res.status}`);
+    }
+    return (await res.json()) as BackendAsset;
   };
 
-  const handleDeleteAsset = (assetId: string) => {
-    if (confirm("Apakah Anda yakin ingin menghapus aset ini?")) {
-      setAssets(assets.filter(asset => asset.id !== assetId));
+  const handleSetMaintenance = async (asset: Asset) => {
+    try {
+      const updated = await patchAssetStatus(asset, "MAINTENANCE");
+      setAssets((prev) =>
+        prev.map((a) =>
+          a.dbId === asset.dbId
+            ? {
+                ...transformAsset(updated),
+                maintenanceSejak: new Date().toLocaleDateString("id-ID", {
+                  day: "numeric",
+                  month: "long",
+                  year: "numeric",
+                }),
+              }
+            : a,
+        ),
+      );
+    } catch (err) {
+      alert(
+        `Gagal set maintenance: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   };
 
-  const handleMarkMaintenanceComplete = (assetId: string) => {
-    const updatedAssets = assets.map(asset => {
-      if (asset.id === assetId) {
-        return {
-          ...asset,
-          status: "Tersedia" as const,
-          maintenanceSejak: undefined
-        };
+  const handleMarkMaintenanceComplete = async (asset: Asset) => {
+    try {
+      const updated = await patchAssetStatus(asset, "AVAILABLE");
+      setAssets((prev) =>
+        prev.map((a) =>
+          a.dbId === asset.dbId
+            ? { ...transformAsset(updated), maintenanceSejak: undefined }
+            : a,
+        ),
+      );
+    } catch (err) {
+      alert(
+        `Gagal menandai selesai: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  };
+
+  const handleDeleteAsset = async (asset: Asset) => {
+    if (!confirm("Apakah Anda yakin ingin menghapus aset ini?")) return;
+    try {
+      const res = await apiFetch(`${API_BASE}/api/assets/${asset.dbId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok && res.status !== 204) {
+        const err = (await res.json().catch(() => null)) as { message?: string } | null;
+        throw new Error(err?.message ?? `HTTP ${res.status}`);
       }
-      return asset;
-    });
-    setAssets(updatedAssets);
+      setAssets((prev) => prev.filter((a) => a.dbId !== asset.dbId));
+    } catch (err) {
+      alert(
+        `Gagal menghapus aset: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   };
 
   const getStatusBadge = (status: Asset["status"]) => {
@@ -569,7 +660,7 @@ export default function Aset() {
                                   <Wrench className="w-4 h-4" />
                                 </button>
                                 <button
-                                  onClick={() => handleDeleteAsset(asset.id)}
+                                  onClick={() => handleDeleteAsset(asset)}
                                   className="p-1.5 hover:bg-gray-100 rounded text-gray-600 hover:text-red-600"
                                   title="Hapus"
                                 >
@@ -653,11 +744,11 @@ export default function Aset() {
                   <Button variant="outline" onClick={() => setAddModalOpen(false)}>
                     Batal
                   </Button>
-                  <Button 
+                  <Button
                     onClick={handleSaveNewAsset}
-                    disabled={!formId || !formNama}
+                    disabled={!formId || !formNama || saving}
                   >
-                    Simpan
+                    {saving ? "Menyimpan..." : "Simpan"}
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -722,8 +813,8 @@ export default function Aset() {
                   <Button variant="outline" onClick={() => setEditModalOpen(false)}>
                     Batal
                   </Button>
-                  <Button onClick={handleSaveEditAsset} disabled={!formNama}>
-                    Simpan Perubahan
+                  <Button onClick={handleSaveEditAsset} disabled={!formNama || saving}>
+                    {saving ? "Menyimpan..." : "Simpan Perubahan"}
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -767,7 +858,7 @@ export default function Aset() {
                             <td className="px-4 py-3 text-sm">
                               <Button
                                 size="sm"
-                                onClick={() => handleMarkMaintenanceComplete(asset.id)}
+                                onClick={() => handleMarkMaintenanceComplete(asset)}
                                 className="bg-green-600 hover:bg-green-700"
                               >
                                 <CheckCircle className="w-4 h-4 mr-2" />
