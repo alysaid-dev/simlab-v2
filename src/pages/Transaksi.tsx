@@ -8,6 +8,7 @@ import { Label } from "../components/ui/label";
 import { Badge } from "../components/ui/badge";
 import { Card } from "../components/ui/card";
 import { Alert, AlertDescription } from "../components/ui/alert";
+import { apiFetch } from "../lib/apiFetch";
 import { RadioGroup, RadioGroupItem } from "../components/ui/radio-group";
 import { Textarea } from "../components/ui/textarea";
 import {
@@ -129,6 +130,7 @@ export default function Transaksi() {
   const [praktikumIdPengguna, setPraktikumIdPengguna] = useState("");
   const [praktikumNama, setPraktikumNama] = useState("");
   const [praktikumIdLaptop, setPraktikumIdLaptop] = useState("");
+  const [praktikumNamaLaptop, setPraktikumNamaLaptop] = useState("");
   const [praktikumNamaPraktikum, setPraktikumNamaPraktikum] = useState("");
   const [praktikumReturnDate, setPraktikumReturnDate] = useState(() => {
     return new Date().toISOString().split('T')[0];
@@ -146,7 +148,7 @@ export default function Transaksi() {
     setLoansLoading(true);
     setLoansError(null);
     try {
-      const r = await fetch(`${API_BASE}/api/loans`, { credentials: "include" });
+      const r = await apiFetch(`${API_BASE}/api/loans`, { credentials: "include" });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const data = (await r.json()) as LoanListResponse;
       const mapped: ActiveLoan[] = data.items
@@ -199,7 +201,7 @@ export default function Transaksi() {
       // Cari loan yang sudah fully APPROVED (lolos kalab) untuk NIM ini.
       // Filter client-side karena backend /api/loans tidak support search by
       // borrower.uid langsung.
-      const r = await fetch(`${API_BASE}/api/loans?status=APPROVED&take=200`, {
+      const r = await apiFetch(`${API_BASE}/api/loans?status=APPROVED&take=200`, {
         credentials: "include",
       });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -246,7 +248,7 @@ export default function Transaksi() {
     if (!foundStudent?.loanId) return;
     try {
       const newEnd = new Date(`${returnDate}T${returnTime}`);
-      await fetch(
+      await apiFetch(
         `${API_BASE}/api/loans/${encodeURIComponent(foundStudent.loanId)}`,
         {
           method: "PATCH",
@@ -255,7 +257,7 @@ export default function Transaksi() {
           body: JSON.stringify({ endDate: newEnd.toISOString() }),
         },
       );
-      const r = await fetch(
+      const r = await apiFetch(
         `${API_BASE}/api/loans/${encodeURIComponent(foundStudent.loanId)}/status`,
         {
           method: "PATCH",
@@ -291,6 +293,34 @@ export default function Transaksi() {
     setReturnTime("16:00");
   };
 
+  const handlePraktikumLaptopIdChange = async (value: string) => {
+    setPraktikumIdLaptop(value);
+    if (value.trim().length < 3) {
+      setPraktikumNamaLaptop("");
+      return;
+    }
+    try {
+      const r = await apiFetch(
+        `${API_BASE}/api/assets?search=${encodeURIComponent(value)}`,
+        { credentials: "include" },
+      );
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = (await r.json()) as { items: BackendAsset[] };
+      const match = data.items.find((a) => a.code === value);
+      if (!match) {
+        setPraktikumNamaLaptop("Laptop Tidak Ditemukan");
+        return;
+      }
+      if (match.status !== "AVAILABLE") {
+        setPraktikumNamaLaptop(`${match.name} (sedang ${match.status.toLowerCase()})`);
+        return;
+      }
+      setPraktikumNamaLaptop(match.name);
+    } catch {
+      setPraktikumNamaLaptop("Gagal memuat data laptop");
+    }
+  };
+
   const handlePraktikumIdChange = async (value: string) => {
     setPraktikumIdPengguna(value);
     if (value.length < 5) {
@@ -299,7 +329,7 @@ export default function Transaksi() {
     }
     // Lookup user by UID (NIM). Backend list endpoint supports search by uid.
     try {
-      const r = await fetch(
+      const r = await apiFetch(
         `${API_BASE}/api/users?search=${encodeURIComponent(value)}`,
         { credentials: "include" },
       );
@@ -318,11 +348,11 @@ export default function Transaksi() {
   const handlePraktikumSubmit = async () => {
     try {
       const [usersRes, assetsRes] = await Promise.all([
-        fetch(
+        apiFetch(
           `${API_BASE}/api/users?search=${encodeURIComponent(praktikumIdPengguna)}`,
           { credentials: "include" },
         ),
-        fetch(`${API_BASE}/api/assets`, { credentials: "include" }),
+        apiFetch(`${API_BASE}/api/assets`, { credentials: "include" }),
       ]);
       if (!usersRes.ok) throw new Error(`Gagal cari mahasiswa: ${usersRes.status}`);
       if (!assetsRes.ok) throw new Error(`Gagal cari laptop: ${assetsRes.status}`);
@@ -340,7 +370,7 @@ export default function Transaksi() {
 
       const startDate = new Date();
       const endDate = new Date(`${praktikumReturnDate}T${praktikumReturnTime}`);
-      const r = await fetch(`${API_BASE}/api/loans`, {
+      const r = await apiFetch(`${API_BASE}/api/loans`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -384,6 +414,7 @@ export default function Transaksi() {
     setPraktikumIdPengguna("");
     setPraktikumNama("");
     setPraktikumIdLaptop("");
+    setPraktikumNamaLaptop("");
     setPraktikumNamaPraktikum("");
     setPraktikumReturnDate(new Date().toISOString().split('T')[0]);
     setPraktikumReturnTime("16:00");
@@ -475,7 +506,7 @@ export default function Transaksi() {
     const loan = activeLoans.find((l) => l.id === id);
     if (!loan) return;
     try {
-      const r = await fetch(
+      const r = await apiFetch(
         `${API_BASE}/api/loans/${encodeURIComponent(loan.backendId)}/status`,
         {
           method: "PATCH",
@@ -499,7 +530,7 @@ export default function Transaksi() {
     if (!selectedLoanForExtension) return;
     try {
       const newEnd = new Date(`${extensionDate}T${extensionTime}`);
-      const r = await fetch(
+      const r = await apiFetch(
         `${API_BASE}/api/loans/${encodeURIComponent(selectedLoanForExtension.backendId)}`,
         {
           method: "PATCH",
@@ -529,7 +560,7 @@ export default function Transaksi() {
       ]
         .filter(Boolean)
         .join(" | ");
-      await fetch(
+      await apiFetch(
         `${API_BASE}/api/loans/${encodeURIComponent(selectedLoanForReturn.backendId)}`,
         {
           method: "PATCH",
@@ -538,7 +569,7 @@ export default function Transaksi() {
           body: JSON.stringify({ notes: noteSuffix }),
         },
       );
-      const r = await fetch(
+      const r = await apiFetch(
         `${API_BASE}/api/loans/${encodeURIComponent(selectedLoanForReturn.backendId)}/status`,
         {
           method: "PATCH",
@@ -563,7 +594,7 @@ export default function Transaksi() {
     if (!selectedLoanForNewExtension) return;
     try {
       const newEnd = new Date(`${newExtensionDate}T16:00`);
-      const r = await fetch(
+      const r = await apiFetch(
         `${API_BASE}/api/loans/${encodeURIComponent(selectedLoanForNewExtension.backendId)}`,
         {
           method: "PATCH",
@@ -883,11 +914,25 @@ export default function Transaksi() {
                         <Input
                           id="idLaptop"
                           value={praktikumIdLaptop}
-                          onChange={(e) => setPraktikumIdLaptop(e.target.value)}
+                          onChange={(e) => handlePraktikumLaptopIdChange(e.target.value)}
                           placeholder="Scan barcode laptop"
                           className="text-base pr-10"
                         />
                         <Barcode className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      </div>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="namaLaptop" className="text-base font-medium">Nama Laptop</Label>
+                      <div className="mt-2">
+                        <Input
+                          id="namaLaptop"
+                          value={praktikumNamaLaptop}
+                          readOnly
+                          placeholder="Terisi otomatis"
+                          className="text-base bg-gray-100"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Terisi otomatis berdasarkan ID Laptop</p>
                       </div>
                     </div>
 
@@ -927,7 +972,17 @@ export default function Transaksi() {
 
                     <Button 
                       onClick={handlePraktikumSubmit}
-                      disabled={!praktikumIdPengguna || !praktikumNama || !praktikumIdLaptop || !praktikumNamaPraktikum}
+                      disabled={
+                        !praktikumIdPengguna ||
+                        !praktikumNama ||
+                        praktikumNama === "Mahasiswa Tidak Ditemukan" ||
+                        !praktikumIdLaptop ||
+                        !praktikumNamaLaptop ||
+                        praktikumNamaLaptop === "Laptop Tidak Ditemukan" ||
+                        praktikumNamaLaptop === "Gagal memuat data laptop" ||
+                        praktikumNamaLaptop.includes("(sedang") ||
+                        !praktikumNamaPraktikum
+                      }
                       className="w-full py-6 text-base"
                     >
                       Catat Transaksi Praktikum
