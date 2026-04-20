@@ -8,6 +8,7 @@ import { HttpError } from "../middleware/errorHandler.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import {
   notifyCancelledBySystemToMahasiswa,
+  notifyLoanActivatedToMahasiswa,
   notifyLoanApprovalToDosen,
   notifyLoanApprovedByDosenToMahasiswa,
   notifyLoanApprovedByKalabToMahasiswa,
@@ -109,32 +110,44 @@ export const loansController = {
       userId: targetUserId,
     });
 
-    // Notify mahasiswa — konfirmasi permohonan dibuat.
-    void notifyLoanCreatedToMahasiswa(
-      {
-        email: loan.borrower.email ?? undefined,
-        phone: loan.borrower.waNumber ?? undefined,
-      },
-      {
+    const mahasiswaRecipient = {
+      email: loan.borrower.email ?? undefined,
+      phone: loan.borrower.waNumber ?? undefined,
+    };
+
+    if (loan.status === LoanStatus.ACTIVE) {
+      // Walk-in (praktikum) — laboran membuat loan langsung ACTIVE. Ini sudah
+      // setara serah terima, jadi kirim notif "Peminjaman Berhasil" bukan
+      // "Permohonan Dibuat" yang mengisyaratkan masih menunggu approval.
+      const actor = await usersService.getByUid(req.user!.uid);
+      void notifyLoanActivatedToMahasiswa(mahasiswaRecipient, {
         namaMahasiswa: loan.borrower.displayName,
         kodeLaptop: loan.asset.code,
         namaLaptop: loan.asset.name,
-      },
-    );
+        tanggalHarusKembali: fmtDateTime(loan.endDate),
+        diserahkanOleh: actor.displayName,
+      });
+    } else {
+      // Alur normal TA — pengajuan masuk PENDING, menunggu approval dosen.
+      void notifyLoanCreatedToMahasiswa(mahasiswaRecipient, {
+        namaMahasiswa: loan.borrower.displayName,
+        kodeLaptop: loan.asset.code,
+        namaLaptop: loan.asset.name,
+      });
 
-    // Notify dosen pembimbing — butuh approval.
-    if (loan.lecturer?.email || loan.lecturer?.waNumber) {
-      void notifyLoanApprovalToDosen(
-        {
-          email: loan.lecturer.email ?? undefined,
-          phone: loan.lecturer.waNumber ?? undefined,
-        },
-        {
-          dosenName: loan.lecturer.displayName,
-          namaMahasiswa: loan.borrower.displayName,
-          nim: loan.borrower.uid,
-        },
-      );
+      if (loan.lecturer?.email || loan.lecturer?.waNumber) {
+        void notifyLoanApprovalToDosen(
+          {
+            email: loan.lecturer.email ?? undefined,
+            phone: loan.lecturer.waNumber ?? undefined,
+          },
+          {
+            dosenName: loan.lecturer.displayName,
+            namaMahasiswa: loan.borrower.displayName,
+            nim: loan.borrower.uid,
+          },
+        );
+      }
     }
 
     res.status(201).json(loan);
@@ -167,6 +180,16 @@ export const loansController = {
         mahasiswaRecipient,
         commonLoanParams,
       );
+    } else if (status === LoanStatus.ACTIVE) {
+      // Step 12 — serah terima selesai oleh laboran. Kirim konfirmasi
+      // peminjaman aktif + tanggal harus kembali ke mahasiswa.
+      void notifyLoanActivatedToMahasiswa(mahasiswaRecipient, {
+        namaMahasiswa: loan.borrower.displayName,
+        kodeLaptop: loan.asset.code,
+        namaLaptop: loan.asset.name,
+        tanggalHarusKembali: fmtDateTime(loan.endDate),
+        diserahkanOleh: actor.displayName,
+      });
     } else if (status === LoanStatus.APPROVED) {
       void notifyLoanApprovedByKalabToMahasiswa(
         mahasiswaRecipient,

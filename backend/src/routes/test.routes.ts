@@ -30,7 +30,9 @@ const templateSchema = z.enum([
   "clearanceCreatedToMahasiswa",
   "clearanceCheckedToMahasiswa",
   "clearanceIssuedToMahasiswa",
-  "loanReminderH2ToMahasiswa",
+  "loanReminderH1ToMahasiswa",
+  "loanReminderH0ToMahasiswa",
+  "loanActivatedToMahasiswa",
   "loanOverdueToMahasiswa",
 ]);
 
@@ -180,12 +182,27 @@ function buildDispatcher(
         penandatangan1: DUMMY.diperiksaOlehLaboran2,
         penandatangan2: DUMMY.kalabName,
       });
-    case "loanReminderH2ToMahasiswa":
-      return notif.notifyLoanReminderH2ToMahasiswa(recipient, {
+    case "loanReminderH1ToMahasiswa":
+      return notif.notifyLoanReminderH1ToMahasiswa(recipient, {
         namaMahasiswa: DUMMY.namaMahasiswa,
         kodeLaptop: DUMMY.kodeLaptop,
         namaLaptop: DUMMY.namaLaptop,
         tanggalJatuhTempo: DUMMY.tanggalJatuhTempo,
+      });
+    case "loanReminderH0ToMahasiswa":
+      return notif.notifyLoanReminderH0ToMahasiswa(recipient, {
+        namaMahasiswa: DUMMY.namaMahasiswa,
+        kodeLaptop: DUMMY.kodeLaptop,
+        namaLaptop: DUMMY.namaLaptop,
+        tanggalJatuhTempo: DUMMY.tanggalJatuhTempo,
+      });
+    case "loanActivatedToMahasiswa":
+      return notif.notifyLoanActivatedToMahasiswa(recipient, {
+        namaMahasiswa: DUMMY.namaMahasiswa,
+        kodeLaptop: DUMMY.kodeLaptop,
+        namaLaptop: DUMMY.namaLaptop,
+        tanggalHarusKembali: DUMMY.tanggalHarusKembali,
+        diserahkanOleh: DUMMY.diperiksaOlehLaboran2,
       });
     case "loanOverdueToMahasiswa":
       return notif.notifyLoanOverdueToMahasiswa(recipient, {

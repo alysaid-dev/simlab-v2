@@ -235,11 +235,25 @@ export async function notifyClearanceRejectedToMahasiswa(
   return dispatch(recipient, t.clearanceRejectedToMahasiswa(params));
 }
 
-export async function notifyLoanReminderH2ToMahasiswa(
+export async function notifyLoanReminderH1ToMahasiswa(
   recipient: Recipient,
-  params: t.LoanReminderH2Params,
+  params: t.LoanReminderH1Params,
 ): Promise<ChannelResults> {
-  return dispatch(recipient, t.loanReminderH2ToMahasiswa(params));
+  return dispatch(recipient, t.loanReminderH1ToMahasiswa(params));
+}
+
+export async function notifyLoanReminderH0ToMahasiswa(
+  recipient: Recipient,
+  params: t.LoanReminderH0Params,
+): Promise<ChannelResults> {
+  return dispatch(recipient, t.loanReminderH0ToMahasiswa(params));
+}
+
+export async function notifyLoanActivatedToMahasiswa(
+  recipient: Recipient,
+  params: t.LoanActivatedParams,
+): Promise<ChannelResults> {
+  return dispatch(recipient, t.loanActivatedToMahasiswa(params));
 }
 
 export async function notifyLoanOverdueToMahasiswa(

@@ -2,15 +2,21 @@ import cron, { type ScheduledTask } from "node-cron";
 import { LoanStatus } from "@prisma/client";
 import { prisma } from "../../config/database.js";
 import { env } from "../../config/env.js";
-import { notifyLoanReminderH2ToMahasiswa } from "./index.js";
+import {
+  notifyLoanReminderH0ToMahasiswa,
+  notifyLoanReminderH1ToMahasiswa,
+} from "./index.js";
 
 /**
- * Compute the [start, end) UTC window that represents "tomorrow" in the
- * scheduler's timezone (Asia/Jakarta by default). The reminder job finds
- * ACTIVE loans whose endDate falls inside this window.
+ * Compute a [start, end) UTC window that represents a calendar day relative to
+ * "today" in the scheduler's timezone (Asia/Jakarta by default). offsetDays=0
+ * returns today, 1 returns tomorrow. Loans whose endDate falls inside the
+ * returned window are considered due on that day.
  */
-function tomorrowRangeInTz(tz: string): { start: Date; end: Date } {
-  // Build the current Y/M/D as seen in the target timezone using Intl.
+function dayRangeInTz(
+  tz: string,
+  offsetDays: number,
+): { start: Date; end: Date } {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: tz,
     year: "numeric",
@@ -22,13 +28,10 @@ function tomorrowRangeInTz(tz: string): { start: Date; end: Date } {
   const m = Number(parts.find((p) => p.type === "month")?.value);
   const d = Number(parts.find((p) => p.type === "day")?.value);
 
-  // Tomorrow at 00:00 in the target TZ — we interpret as UTC for the DB query.
-  // Using UTC constructors here is a deliberate approximation: it gives a
-  // 24-hour window centered on tomorrow's date; loans whose endDate is stored
-  // as "2025-04-18 23:59:59" (UTC) will still match on the correct calendar
-  // day for Asia/Jakarta within a few hours. Good enough for H-1 reminders.
-  const start = new Date(Date.UTC(y, m - 1, d + 1, 0, 0, 0));
-  const end = new Date(Date.UTC(y, m - 1, d + 2, 0, 0, 0));
+  // Interpret the target calendar day (00:00 local) as UTC — deliberate
+  // approximation, good enough for daily reminders (see note in prior version).
+  const start = new Date(Date.UTC(y, m - 1, d + offsetDays, 0, 0, 0));
+  const end = new Date(Date.UTC(y, m - 1, d + offsetDays + 1, 0, 0, 0));
   return { start, end };
 }
 
@@ -39,14 +42,13 @@ export interface ReminderRunResult {
   skippedNoContact: number;
 }
 
-/**
- * The actual reminder worker. Exposed so controllers / tests can trigger it
- * manually without waiting for the cron tick.
- */
-export async function runH1ReminderJob(): Promise<ReminderRunResult> {
-  const { start, end } = tomorrowRangeInTz(env.scheduler.timezone);
+type ReminderKind = "H-1" | "H-0";
+
+async function runReminderJob(kind: ReminderKind): Promise<ReminderRunResult> {
+  const offset = kind === "H-1" ? 1 : 0;
+  const { start, end } = dayRangeInTz(env.scheduler.timezone, offset);
   console.log(
-    `[scheduler] H-1 reminder scan for loans ending between ${start.toISOString()} and ${end.toISOString()}`
+    `[scheduler] ${kind} reminder scan for loans ending between ${start.toISOString()} and ${end.toISOString()}`,
   );
 
   const loans = await prisma.loan.findMany({
@@ -74,31 +76,34 @@ export async function runH1ReminderJob(): Promise<ReminderRunResult> {
       continue;
     }
 
-    const endDate = loan.endDate;
-const tanggalJatuhTempo = new Intl.DateTimeFormat("id-ID", {
-  timeZone: "Asia/Jakarta",
-  dateStyle: "long",
-}).format(endDate);
+    const tanggalJatuhTempo = new Intl.DateTimeFormat("id-ID", {
+      timeZone: "Asia/Jakarta",
+      dateStyle: "long",
+    }).format(loan.endDate);
 
-const result = await notifyLoanReminderH2ToMahasiswa(
-  {
-    email: loan.borrower.email ?? undefined,
-    phone: loan.borrower.waNumber ?? undefined,
-  },
-  {
-    namaMahasiswa: loan.borrower.displayName,
-    kodeLaptop: loan.asset.code,
-    namaLaptop: loan.asset.name,
-    tanggalJatuhTempo,
-  }
-);
+    const recipient = {
+      email: loan.borrower.email ?? undefined,
+      phone: loan.borrower.waNumber ?? undefined,
+    };
+    const params = {
+      namaMahasiswa: loan.borrower.displayName,
+      kodeLaptop: loan.asset.code,
+      namaLaptop: loan.asset.name,
+      tanggalJatuhTempo,
+    };
 
-if (result.email.status === "sent" || result.whatsapp.status === "sent") sent++;
-else failed++;
+    const result =
+      kind === "H-1"
+        ? await notifyLoanReminderH1ToMahasiswa(recipient, params)
+        : await notifyLoanReminderH0ToMahasiswa(recipient, params);
+
+    if (result.email.status === "sent" || result.whatsapp.status === "sent")
+      sent++;
+    else failed++;
   }
 
   console.log(
-    `[scheduler] reminder run done: ${loans.length} loans, sent=${sent}, failed=${failed}, skipped=${skippedNoContact}`
+    `[scheduler] ${kind} reminder done: ${loans.length} loans, sent=${sent}, failed=${failed}, skipped=${skippedNoContact}`,
   );
 
   return {
@@ -109,14 +114,22 @@ else failed++;
   };
 }
 
+export function runH1ReminderJob(): Promise<ReminderRunResult> {
+  return runReminderJob("H-1");
+}
+
+export function runH0ReminderJob(): Promise<ReminderRunResult> {
+  return runReminderJob("H-0");
+}
+
 // -----------------------------------------------------------------------------
 // Cron task lifecycle
 // -----------------------------------------------------------------------------
 
-let task: ScheduledTask | null = null;
+const tasks: ScheduledTask[] = [];
 
 export function startScheduler(): void {
-  if (task) {
+  if (tasks.length > 0) {
     console.warn("[scheduler] already running — ignoring start()");
     return;
   }
@@ -128,32 +141,44 @@ export function startScheduler(): void {
   const expr = env.scheduler.reminderCron;
   if (!cron.validate(expr)) {
     console.error(
-      `[scheduler] invalid cron expression: "${expr}" — scheduler not started`
+      `[scheduler] invalid cron expression: "${expr}" — scheduler not started`,
     );
     return;
   }
 
-  task = cron.schedule(
+  // H-1 dan H-0 dijadwalkan pakai ekspresi cron yang sama (default 08:00 WIB).
+  // Setiap tick, dua job jalan berurutan: reminder untuk loan yang jatuh tempo
+  // besok (H-1) dan yang jatuh tempo hari ini (H-0).
+  const h1Task = cron.schedule(
     expr,
     () => {
       runH1ReminderJob().catch((err) => {
-        console.error("[scheduler] reminder job crashed:", err);
+        console.error("[scheduler] H-1 reminder crashed:", err);
       });
     },
-    {
-      scheduled: true,
-      timezone: env.scheduler.timezone,
-    }
+    { scheduled: true, timezone: env.scheduler.timezone },
   );
 
+  const h0Task = cron.schedule(
+    expr,
+    () => {
+      runH0ReminderJob().catch((err) => {
+        console.error("[scheduler] H-0 reminder crashed:", err);
+      });
+    },
+    { scheduled: true, timezone: env.scheduler.timezone },
+  );
+
+  tasks.push(h1Task, h0Task);
+
   console.log(
-    `[scheduler] H-1 reminder scheduled with cron "${expr}" (${env.scheduler.timezone})`
+    `[scheduler] H-1 + H-0 reminders scheduled with cron "${expr}" (${env.scheduler.timezone})`,
   );
 }
 
 export function stopScheduler(): void {
-  if (!task) return;
-  task.stop();
-  task = null;
+  if (tasks.length === 0) return;
+  for (const t of tasks) t.stop();
+  tasks.length = 0;
   console.log("[scheduler] stopped");
 }

@@ -820,9 +820,9 @@ ${waDetails([
 }
 
 // ---------------------------------------------------------------------------
-// 14. Mahasiswa — reminder H-2 jatuh tempo peminjaman laptop
+// 14a. Mahasiswa — reminder H-1 jatuh tempo peminjaman laptop
 // ---------------------------------------------------------------------------
-export interface LoanReminderH2Params {
+export interface LoanReminderH1Params {
   namaMahasiswa: string;
   kodeLaptop: string;
   namaLaptop: string;
@@ -830,9 +830,9 @@ export interface LoanReminderH2Params {
   dendaPerHari?: string;
 }
 
-export function loanReminderH2ToMahasiswa(p0: LoanReminderH2Params): NotificationTemplate {
+export function loanReminderH1ToMahasiswa(p0: LoanReminderH1Params): NotificationTemplate {
   const denda = p0.dendaPerHari ?? LATE_FEE_PER_DAY;
-  const subject = '[SIMLAB] Peminjaman Laptop Anda Jatuh Tempo';
+  const subject = '[SIMLAB] Pengingat: Peminjaman Laptop Jatuh Tempo Besok';
   const html = emailLayout({
     greeting: `Yth. ${p0.namaMahasiswa}`,
     bodyHtml:
@@ -841,7 +841,7 @@ export function loanReminderH2ToMahasiswa(p0: LoanReminderH2Params): Notificatio
         ['Kode Laptop', p0.kodeLaptop],
         ['Laptop', p0.namaLaptop],
       ]) +
-      p(`akan <strong>jatuh tempo dalam 2 hari</strong> pada tanggal <strong>${p0.tanggalJatuhTempo}</strong>.`) +
+      p(`akan <strong>jatuh tempo besok</strong> pada tanggal <strong>${p0.tanggalJatuhTempo}</strong>.`) +
       p('Mohon segera menghubungi laboratorium untuk mengembalikan atau memperpanjang.') +
       `<div style="margin:16px 0;padding:12px 16px;background:#fee2e2;border-left:4px solid #dc2626;border-radius:4px;font-size:13px;line-height:1.6;color:#7f1d1d">
          Keterlambatan pengembalian akan dikenakan denda sebesar <strong>${denda} per hari</strong>.
@@ -849,10 +849,10 @@ export function loanReminderH2ToMahasiswa(p0: LoanReminderH2Params): Notificatio
   });
   const whatsapp = `${WA_SALAM}
 
-*Pengingat: Peminjaman Jatuh Tempo*
+*Pengingat: Peminjaman Jatuh Tempo Besok*
 
 Yth. ${p0.namaMahasiswa},
-Peminjaman laptop Anda akan *jatuh tempo dalam 2 hari* pada ${p0.tanggalJatuhTempo}.
+Peminjaman laptop Anda akan *jatuh tempo besok* pada ${p0.tanggalJatuhTempo}.
 
 ${waDetails([
   ['🏷️ Kode', p0.kodeLaptop],
@@ -862,6 +862,106 @@ ${waDetails([
 
 Mohon segera mengembalikan atau memperpanjang.
 ⚠️ Keterlambatan dikenakan denda ${denda}/hari.${WA_FOOTER}`;
+  return { subject, html, whatsapp };
+}
+
+// ---------------------------------------------------------------------------
+// 14b. Mahasiswa — reminder H-0 (hari jatuh tempo) peminjaman laptop
+// ---------------------------------------------------------------------------
+export interface LoanReminderH0Params {
+  namaMahasiswa: string;
+  kodeLaptop: string;
+  namaLaptop: string;
+  tanggalJatuhTempo: string;
+  dendaPerHari?: string;
+}
+
+export function loanReminderH0ToMahasiswa(p0: LoanReminderH0Params): NotificationTemplate {
+  const denda = p0.dendaPerHari ?? LATE_FEE_PER_DAY;
+  const subject = '[SIMLAB] Peminjaman Laptop Jatuh Tempo Hari Ini';
+  const html = emailLayout({
+    greeting: `Yth. ${p0.namaMahasiswa}`,
+    bodyHtml:
+      p('Kami mengingatkan bahwa peminjaman laptop Anda:') +
+      detailTable([
+        ['Kode Laptop', p0.kodeLaptop],
+        ['Laptop', p0.namaLaptop],
+        ['Tanggal Jatuh Tempo', p0.tanggalJatuhTempo],
+      ]) +
+      p('<strong>jatuh tempo hari ini</strong>. Mohon segera mengembalikan ke laboratorium, atau ajukan perpanjangan bila masih diperlukan.') +
+      `<div style="margin:16px 0;padding:12px 16px;background:#fee2e2;border-left:4px solid #dc2626;border-radius:4px;font-size:13px;line-height:1.6;color:#7f1d1d">
+         Keterlambatan pengembalian akan dikenakan denda sebesar <strong>${denda} per hari</strong> terhitung mulai besok.
+       </div>`,
+  });
+  const whatsapp = `${WA_SALAM}
+
+*Jatuh Tempo Hari Ini*
+
+Yth. ${p0.namaMahasiswa},
+Peminjaman laptop Anda *jatuh tempo hari ini* (${p0.tanggalJatuhTempo}).
+
+${waDetails([
+  ['🏷️ Kode', p0.kodeLaptop],
+  ['💻 Laptop', p0.namaLaptop],
+])}
+
+Mohon segera mengembalikan atau ajukan perpanjangan.
+⚠️ Denda ${denda}/hari mulai berjalan besok bila belum dikembalikan.${WA_FOOTER}`;
+  return { subject, html, whatsapp };
+}
+
+// ---------------------------------------------------------------------------
+// 14c. Mahasiswa — peminjaman laptop telah aktif (serah terima oleh laboran)
+// ---------------------------------------------------------------------------
+export interface LoanActivatedParams {
+  namaMahasiswa: string;
+  kodeLaptop: string;
+  namaLaptop: string;
+  tanggalHarusKembali: string;
+  diserahkanOleh?: string;
+  linkSimlab?: string;
+  dendaPerHari?: string;
+}
+
+export function loanActivatedToMahasiswa(p0: LoanActivatedParams): NotificationTemplate {
+  const link = p0.linkSimlab ?? SIMLAB_URL;
+  const denda = p0.dendaPerHari ?? LATE_FEE_PER_DAY;
+  const subject = '[SIMLAB] Peminjaman Laptop Berhasil — Serah Terima Selesai';
+  const html = emailLayout({
+    greeting: `Yth. ${p0.namaMahasiswa}`,
+    bodyHtml:
+      p('Proses serah terima peminjaman laptop Anda telah selesai dilakukan oleh laboran. Berikut detail peminjaman aktif Anda:') +
+      detailTable([
+        ['Kode Laptop', p0.kodeLaptop],
+        ['Laptop', p0.namaLaptop],
+        ['Tanggal Harus Kembali', p0.tanggalHarusKembali],
+        ...(p0.diserahkanOleh ? ([['Diserahkan Oleh', p0.diserahkanOleh]] as Array<[string, string]>) : []),
+      ]) +
+      p('Mohon jaga laptop dengan baik dan kembalikan tepat waktu. Jika membutuhkan perpanjangan, ajukan permohonan melalui SIMLAB sebelum tanggal jatuh tempo.') +
+      `<div style="margin:16px 0;padding:12px 16px;background:#fef3c7;border-left:4px solid #f59e0b;border-radius:4px;font-size:13px;line-height:1.6;color:#78350f">
+         Keterlambatan pengembalian dikenakan denda sebesar <strong>${denda} per hari</strong>.
+       </div>`,
+    linkSimlab: link,
+    linkLabel: 'Pantau Peminjaman',
+  });
+  const whatsapp = `${WA_SALAM}
+
+*Peminjaman Laptop Berhasil*
+
+Yth. ${p0.namaMahasiswa},
+Serah terima laptop telah selesai. Peminjaman Anda kini aktif.
+
+${waDetails([
+  ['🏷️ Kode', p0.kodeLaptop],
+  ['💻 Laptop', p0.namaLaptop],
+  ['📅 Harus Kembali', p0.tanggalHarusKembali],
+  ...(p0.diserahkanOleh ? ([['👤 Diserahkan Oleh', p0.diserahkanOleh]] as Array<[string, string]>) : []),
+])}
+
+Mohon kembalikan tepat waktu atau ajukan perpanjangan sebelum jatuh tempo.
+⚠️ Keterlambatan dikenakan denda ${denda}/hari.
+
+🔗 ${link}${WA_FOOTER}`;
   return { subject, html, whatsapp };
 }
 
