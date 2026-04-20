@@ -53,7 +53,7 @@ function createApp(): Express {
   // Workaround: frontend kirim POST + header X-HTTP-Method-Override, middleware
   // ini rewrite req.method sebelum router cocokkan. DELETE ikut di-whitelist
   // untuk amannya (belum terkonfirmasi diblok, tapi pola override-nya sama).
-  const METHOD_OVERRIDE_WHITELIST = new Set(["PATCH", "DELETE"]);
+  const METHOD_OVERRIDE_WHITELIST = new Set(["PATCH", "DELETE", "PUT"]);
   app.use((req, _res, next) => {
     if (req.method === "POST") {
       const override = req.header("x-http-method-override")?.toUpperCase();

@@ -9,7 +9,7 @@
  *
  * Method lain diteruskan apa adanya.
  */
-const OVERRIDE_METHODS = new Set(["PATCH", "DELETE"]);
+const OVERRIDE_METHODS = new Set(["PATCH", "DELETE", "PUT"]);
 
 export async function apiFetch(
   input: RequestInfo | URL,
