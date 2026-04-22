@@ -11,11 +11,11 @@ import PersetujuanLaboran from "./pages/PersetujuanLaboran";
 import Transaksi from "./pages/Transaksi";
 import PeminjamanAlat from "./pages/PeminjamanAlat";
 import Aset from "./pages/Aset";
-import HabisPakai from "./pages/HabisPakai";
 import TransaksiHabisPakai from "./pages/TransaksiHabisPakai";
 import Akun from "./pages/Akun";
 import PengaturanAplikasi from "./pages/PengaturanAplikasi";
 import MonitorTransaksi from "./pages/MonitorTransaksi";
+import History from "./pages/History";
 import VerifyQR from "./pages/VerifyQR";
 import { ProtectedRoute, PublicOnlyRoute } from "./components/ProtectedRoute";
 
@@ -75,10 +75,6 @@ export const router = createBrowserRouter([
     Component: guarded(Aset),
   },
   {
-    path: "/habis-pakai",
-    Component: guarded(HabisPakai),
-  },
-  {
     path: "/transaksi-habis-pakai",
     Component: guarded(TransaksiHabisPakai),
   },
@@ -93,6 +89,10 @@ export const router = createBrowserRouter([
   {
     path: "/monitor-transaksi",
     Component: guarded(MonitorTransaksi),
+  },
+  {
+    path: "/history",
+    Component: guarded(History),
   },
   {
     path: "/verify/:hash",
