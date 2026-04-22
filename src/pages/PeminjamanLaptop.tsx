@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { PageLayout } from "../components/PageLayout";
 import { Laptop, Loader2, AlertTriangle } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useDialog } from "../lib/dialog";
 
-type View = "peminjaman-baru" | "riwayat";
+type View = "peminjaman-baru" | "aktif" | "riwayat";
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
 
@@ -34,6 +35,8 @@ type BackendLoanStatus =
   | "RETURNED"
   | "OVERDUE"
   | "CANCELLED";
+
+const FINAL_STATUSES: BackendLoanStatus[] = ["RETURNED", "REJECTED", "CANCELLED"];
 
 interface BackendLoan {
   id: string;
@@ -105,6 +108,7 @@ interface LoanRecord {
   persetujuanDosen: string;
   persetujuanKalab: string;
   status: string;
+  rawStatus: BackendLoanStatus;
   keterangan: string;
 }
 
@@ -204,6 +208,7 @@ const laptopSpecs: Record<string, LaptopSpec> = {
 
 export default function PeminjamanLaptop() {
   const { user } = useAuth();
+  const { alert } = useDialog();
   const [currentView, setCurrentView] = useState<View | null>(null);
   const [formData, setFormData] = useState({
     itemDipilih: "",
@@ -264,7 +269,7 @@ export default function PeminjamanLaptop() {
   const [riwayatError, setRiwayatError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (currentView !== "riwayat") return;
+    if (currentView !== "riwayat" && currentView !== "aktif") return;
     if (!user?.dbUser?.id) return;
     let cancelled = false;
     setRiwayatLoading(true);
@@ -291,6 +296,7 @@ export default function PeminjamanLaptop() {
               persetujuanDosen: stages.dosen,
               persetujuanKalab: stages.kalab,
               status: stages.statusLabel,
+              rawStatus: l.status,
               keterangan: l.notes ?? "-",
             };
           }),
@@ -310,6 +316,9 @@ export default function PeminjamanLaptop() {
       cancelled = true;
     };
   }, [currentView, user?.dbUser?.id]);
+
+  const riwayatAktif = riwayat.filter((r) => !FINAL_STATUSES.includes(r.rawStatus));
+  const riwayatFinal = riwayat.filter((r) => FINAL_STATUSES.includes(r.rawStatus));
   // Daftar dosen — diambil dari /api/users?role=DOSEN (diseed dari
   // data dosen Lab Statistika). Endpoint ini terbuka untuk semua user
   // ter-autentikasi, khusus kalau filter role=DOSEN.
@@ -366,11 +375,11 @@ export default function PeminjamanLaptop() {
     // Resolve assetId dari kode laptop yang dipilih.
     const asset = laptops.find((a) => a.code === formData.itemDipilih);
     if (!asset) {
-      alert("Pilih laptop terlebih dahulu.");
+      await alert("Pilih laptop terlebih dahulu.");
       return;
     }
     if (!formData.dosenPembimbing) {
-      alert("Pilih dosen pembimbing.");
+      await alert("Pilih dosen pembimbing.");
       return;
     }
 
@@ -404,9 +413,10 @@ export default function PeminjamanLaptop() {
           | null;
         throw new Error(err?.message ?? `HTTP ${res.status}`);
       }
-      alert(
+      await alert(
         "Pengajuan peminjaman berhasil dikirim!\n\n" +
           "Notifikasi telah dikirim ke dosen pembimbing untuk persetujuan.",
+        { title: "Berhasil" },
       );
       setFormData((prev) => ({
         ...prev,
@@ -419,7 +429,7 @@ export default function PeminjamanLaptop() {
       }));
       setCurrentView("riwayat");
     } catch (err) {
-      alert(
+      await alert(
         `Gagal mengirim permohonan: ${
           err instanceof Error ? err.message : String(err)
         }`,
@@ -673,12 +683,17 @@ export default function PeminjamanLaptop() {
       );
     }
 
-    if (currentView === "riwayat") {
+    if (currentView === "aktif" || currentView === "riwayat") {
+      const records = currentView === "aktif" ? riwayatAktif : riwayatFinal;
+      const emptyLabel =
+        currentView === "aktif"
+          ? "Tidak ada peminjaman yang sedang berjalan."
+          : "Belum ada riwayat peminjaman laptop.";
       if (riwayatLoading) {
         return (
           <div className="flex items-center gap-3 p-4 rounded-lg bg-gray-50 border border-gray-200 text-gray-700">
             <Loader2 className="w-5 h-5 animate-spin" />
-            <span>Memuat riwayat pengajuan…</span>
+            <span>Memuat data…</span>
           </div>
         );
       }
@@ -687,17 +702,15 @@ export default function PeminjamanLaptop() {
           <div className="flex items-start gap-3 p-4 rounded-lg bg-red-50 border border-red-200 text-red-800">
             <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="font-medium">Gagal memuat riwayat</p>
+              <p className="font-medium">Gagal memuat data</p>
               <p className="text-sm">{riwayatError}</p>
             </div>
           </div>
         );
       }
-      if (riwayat.length === 0) {
+      if (records.length === 0) {
         return (
-          <div className="text-center py-12 text-gray-500">
-            Belum ada riwayat peminjaman laptop.
-          </div>
+          <div className="text-center py-12 text-gray-500">{emptyLabel}</div>
         );
       }
       return (
@@ -726,7 +739,7 @@ export default function PeminjamanLaptop() {
               </tr>
             </thead>
             <tbody>
-              {riwayat.map((record) => (
+              {records.map((record) => (
                 <tr key={record.id} className="border-b hover:bg-gray-50">
                   <td className="py-3 px-4 text-gray-700">
                     {record.tanggalPengajuan}
@@ -819,14 +832,16 @@ export default function PeminjamanLaptop() {
       title="Peminjaman Laptop"
       breadcrumbs={[{ label: "Peminjaman Laptop" }]}
       icon={<Laptop className="w-8 h-8 text-white" />}
-      sidebarItems={['Peminjaman Baru', 'Riwayat Pengajuan']}
+      sidebarItems={['Peminjaman Baru', 'Peminjaman Aktif', 'Riwayat']}
       onSidebarItemClick={(item) => {
         if (item === "Peminjaman Baru") setCurrentView("peminjaman-baru");
-        else if (item === "Riwayat Pengajuan") setCurrentView("riwayat");
+        else if (item === "Peminjaman Aktif") setCurrentView("aktif");
+        else if (item === "Riwayat") setCurrentView("riwayat");
       }}
       activeItem={
         currentView === "peminjaman-baru" ? "Peminjaman Baru" :
-        currentView === "riwayat" ? "Riwayat Pengajuan" :
+        currentView === "aktif" ? "Peminjaman Aktif" :
+        currentView === "riwayat" ? "Riwayat" :
         undefined
       }
       hideHeader={!currentView}

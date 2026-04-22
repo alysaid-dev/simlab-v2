@@ -11,8 +11,11 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatDateTime } from "../lib/format";
+import { useDialog } from "../lib/dialog";
 
-type View = "pengajuan-baru" | "riwayat";
+type View = "pengajuan-baru" | "aktif" | "riwayat";
+
+const ACTIVE_RESERVATION_STATUSES = new Set(["PENDING", "CHECKED", "APPROVED"]);
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
 
@@ -74,6 +77,7 @@ const statusColor: Record<BackendReservationStatus, string> = {
 
 export default function PeminjamanRuangan() {
   const { user } = useAuth();
+  const { alert } = useDialog();
   const [currentView, setCurrentView] = useState<View | null>(null);
 
   const [rooms, setRooms] = useState<BackendRoom[]>([]);
@@ -160,9 +164,9 @@ export default function PeminjamanRuangan() {
     };
   }, []);
 
-  // Load user's own reservations when Riwayat tab opens.
+  // Load user's own reservations for both Aktif & Riwayat tabs.
   useEffect(() => {
-    if (currentView !== "riwayat") return;
+    if (currentView !== "riwayat" && currentView !== "aktif") return;
     if (!user?.dbUser?.id) return;
     let cancelled = false;
     setReservationsLoading(true);
@@ -232,7 +236,7 @@ export default function PeminjamanRuangan() {
       setSuratFile(null);
       setSuratError(null);
     } catch (err) {
-      alert(
+      await alert(
         `Gagal mengajukan reservasi: ${
           err instanceof Error ? err.message : String(err)
         }`,
@@ -493,12 +497,21 @@ export default function PeminjamanRuangan() {
     </form>
   );
 
-  const renderRiwayat = () => {
+  const renderList = (mode: "aktif" | "riwayat") => {
+    const filtered = reservations.filter((r) =>
+      mode === "aktif"
+        ? ACTIVE_RESERVATION_STATUSES.has(r.status)
+        : !ACTIVE_RESERVATION_STATUSES.has(r.status),
+    );
+    const emptyLabel =
+      mode === "aktif"
+        ? "Tidak ada reservasi yang sedang berjalan."
+        : "Belum ada riwayat reservasi ruangan.";
     if (reservationsLoading) {
       return (
         <div className="flex items-center gap-3 p-4 rounded-lg bg-gray-50 border border-gray-200 text-gray-700">
           <Loader2 className="w-5 h-5 animate-spin" />
-          <span>Memuat riwayat…</span>
+          <span>Memuat data…</span>
         </div>
       );
     }
@@ -507,17 +520,15 @@ export default function PeminjamanRuangan() {
         <div className="flex items-start gap-3 p-4 rounded-lg bg-red-50 border border-red-200 text-red-800">
           <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
           <div>
-            <p className="font-medium">Gagal memuat riwayat</p>
+            <p className="font-medium">Gagal memuat data</p>
             <p className="text-sm">{reservationsError}</p>
           </div>
         </div>
       );
     }
-    if (reservations.length === 0) {
+    if (filtered.length === 0) {
       return (
-        <div className="text-center py-12 text-gray-500">
-          Belum ada riwayat reservasi ruangan.
-        </div>
+        <div className="text-center py-12 text-gray-500">{emptyLabel}</div>
       );
     }
     return (
@@ -546,7 +557,7 @@ export default function PeminjamanRuangan() {
             </tr>
           </thead>
           <tbody>
-            {reservations.map((r) => (
+            {filtered.map((r) => (
               <tr key={r.id} className="border-b hover:bg-gray-50">
                 <td className="py-3 px-4 text-gray-700">
                   {formatDateTime(r.createdAt)}
@@ -580,7 +591,8 @@ export default function PeminjamanRuangan() {
 
   const renderContent = () => {
     if (currentView === "pengajuan-baru") return renderFormView();
-    if (currentView === "riwayat") return renderRiwayat();
+    if (currentView === "aktif") return renderList("aktif");
+    if (currentView === "riwayat") return renderList("riwayat");
     return (
       <div className="max-w-md">
         <div className="w-[150px] h-[150px] bg-gradient-to-br from-purple-600 to-pink-500 rounded-xl flex items-center justify-center mb-3">
@@ -621,19 +633,23 @@ export default function PeminjamanRuangan() {
       breadcrumbs={[
         { label: "Peminjaman Ruangan" },
         ...(currentView === "pengajuan-baru" ? [{ label: "Pengajuan Baru" }] : []),
-        ...(currentView === "riwayat" ? [{ label: "Riwayat Pengajuan" }] : []),
+        ...(currentView === "aktif" ? [{ label: "Reservasi Aktif" }] : []),
+        ...(currentView === "riwayat" ? [{ label: "Riwayat" }] : []),
       ]}
       icon={<DoorOpen className="w-8 h-8 text-white" />}
-      sidebarItems={["Pengajuan Baru", "Riwayat Pengajuan"]}
+      sidebarItems={["Pengajuan Baru", "Reservasi Aktif", "Riwayat"]}
       onSidebarItemClick={(item) => {
         if (item === "Pengajuan Baru") setCurrentView("pengajuan-baru");
-        else if (item === "Riwayat Pengajuan") setCurrentView("riwayat");
+        else if (item === "Reservasi Aktif") setCurrentView("aktif");
+        else if (item === "Riwayat") setCurrentView("riwayat");
       }}
       activeItem={
         currentView === "pengajuan-baru"
           ? "Pengajuan Baru"
+          : currentView === "aktif"
+          ? "Reservasi Aktif"
           : currentView === "riwayat"
-          ? "Riwayat Pengajuan"
+          ? "Riwayat"
           : undefined
       }
       hideHeader={!currentView}
