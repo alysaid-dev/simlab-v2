@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { PageLayout } from "../components/PageLayout";
-import { Package, Search, Plus, Pencil, Wrench, Trash2, CheckCircle, AlertCircle, Eye, ArrowLeft, Loader2 } from "lucide-react";
+import { Laptop, Search, Plus, Pencil, Wrench, Trash2, CheckCircle, AlertCircle, Eye, ArrowLeft, Loader2 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Textarea } from "../components/ui/textarea";
 import { apiFetch } from "@/lib/apiFetch";
+import { useDialog } from "@/lib/dialog";
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
 
@@ -127,6 +128,7 @@ function loanTypeToJenis(t: BackendLoan["type"]): "Tugas Akhir" | "Praktikum" {
 }
 
 export default function Aset() {
+  const { alert, confirm } = useDialog();
   const [activeMenu, setActiveMenu] = useState<string>("");
   const [assets, setAssets] = useState<Asset[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -247,7 +249,7 @@ export default function Aset() {
       setAssets((prev) => [transformAsset(created), ...prev]);
       setAddModalOpen(false);
     } catch (err) {
-      alert(
+      await alert(
         `Gagal menyimpan aset: ${err instanceof Error ? err.message : String(err)}`,
       );
     } finally {
@@ -292,7 +294,7 @@ export default function Aset() {
       setEditModalOpen(false);
       setSelectedAsset(null);
     } catch (err) {
-      alert(
+      await alert(
         `Gagal menyimpan perubahan: ${err instanceof Error ? err.message : String(err)}`,
       );
     } finally {
@@ -335,7 +337,7 @@ export default function Aset() {
         ),
       );
     } catch (err) {
-      alert(
+      await alert(
         `Gagal set maintenance: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
@@ -352,14 +354,18 @@ export default function Aset() {
         ),
       );
     } catch (err) {
-      alert(
+      await alert(
         `Gagal menandai selesai: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
   };
 
   const handleDeleteAsset = async (asset: Asset) => {
-    if (!confirm("Apakah Anda yakin ingin menghapus aset ini?")) return;
+    const ok = await confirm(
+      `Apakah Anda yakin ingin menghapus aset "${asset.nama}"?`,
+      { destructive: true, confirmText: "Hapus" },
+    );
+    if (!ok) return;
     try {
       const res = await apiFetch(`${API_BASE}/api/assets/${asset.dbId}`, {
         method: "DELETE",
@@ -371,7 +377,7 @@ export default function Aset() {
       }
       setAssets((prev) => prev.filter((a) => a.dbId !== asset.dbId));
     } catch (err) {
-      alert(
+      await alert(
         `Gagal menghapus aset: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
@@ -933,13 +939,13 @@ export default function Aset() {
 
   return (
     <PageLayout
-      title="Aset"
+      title="Manajemen Aset Laptop"
       breadcrumbs={[
-        { label: "Aset" },
+        { label: "Manajemen Aset Laptop" },
         ...(activeMenu ? [{ label: activeMenu }] : []),
         ...(viewingAssetDetail ? [{ label: "Detail Peminjaman" }] : [])
       ]}
-      icon={<Package className="w-8 h-8 text-white" />}
+      icon={<Laptop className="w-8 h-8 text-white" />}
       sidebarItems={['Daftar Aset', 'Maintenance']}
       onSidebarItemClick={setActiveMenu}
       activeItem={activeMenu}
@@ -949,19 +955,19 @@ export default function Aset() {
         <div className="max-w-md">
           {/* Icon Container */}
           <div className="w-[150px] h-[150px] bg-gradient-to-br from-amber-600 to-orange-500 rounded-xl flex items-center justify-center mb-3">
-            <Package className="w-11 h-11 text-white" />
+            <Laptop className="w-11 h-11 text-white" />
           </div>
-          
+
           {/* Title */}
-          <h2 className="font-bold text-gray-900 text-xl mb-1">Aset</h2>
-          <p className="text-sm text-gray-500 mb-5">Manajemen Aset Laboratorium Statistika</p>
-          
+          <h2 className="font-bold text-gray-900 text-xl mb-1">Manajemen Aset Laptop</h2>
+          <p className="text-sm text-gray-500 mb-5">Manajemen aset laptop Laboratorium Statistika</p>
+
           {/* Button */}
           <button
             onClick={() => setActiveMenu("Daftar Aset")}
             className="flex items-center gap-2 bg-blue-900 text-white px-6 py-3 rounded-lg hover:bg-blue-800 transition-colors font-medium shadow-sm hover:shadow-md"
           >
-            Masuk ke Aset
+            Masuk ke Manajemen Aset Laptop
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
