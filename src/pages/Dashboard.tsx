@@ -66,10 +66,10 @@ const modules: ModuleTile[] = [
     link: "/persetujuan-laboran",
   },
   {
-    title: "Transaksi",
-    description: "Proses transasksi peminjaman laptop",
+    title: "Transaksi Laptop",
+    description: "Proses transaksi peminjaman laptop",
     bgColor: "bg-gradient-to-br from-blue-600 to-indigo-500",
-    icon: "creditcard",
+    icon: "laptop",
     link: "/transaksi",
   },
   {
@@ -80,10 +80,10 @@ const modules: ModuleTile[] = [
     link: "/peminjaman-alat",
   },
   {
-    title: "Aset",
-    description: "Manajemen Aset Laboratorium Statistika",
+    title: "Manajemen Aset Laptop",
+    description: "Manajemen aset laptop Laboratorium Statistika",
     bgColor: "bg-gradient-to-br from-amber-600 to-orange-500",
-    icon: "package",
+    icon: "laptop",
     link: "/aset",
   },
   {

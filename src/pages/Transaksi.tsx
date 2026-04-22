@@ -2,7 +2,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { useEffect, useState } from "react";
 import { PageLayout } from "../components/PageLayout";
 import { RiwayatDendaPanel } from "../components/RiwayatDendaPanel";
-import { CreditCard, Search, Loader2, CheckCircle, AlertCircle, Scan, Barcode, Calendar, Clock, MessageCircle, ChevronDown, RotateCcw, CalendarIcon } from "lucide-react";
+import { Laptop, Search, Loader2, CheckCircle, AlertCircle, Scan, Barcode, Calendar, Clock, MessageCircle, ChevronDown, RotateCcw, CalendarIcon } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -10,6 +10,7 @@ import { Badge } from "../components/ui/badge";
 import { Card } from "../components/ui/card";
 import { Alert, AlertDescription } from "../components/ui/alert";
 import { apiFetch } from "../lib/apiFetch";
+import { useDialog } from "../lib/dialog";
 import { RadioGroup, RadioGroupItem } from "../components/ui/radio-group";
 import { Textarea } from "../components/ui/textarea";
 import {
@@ -114,6 +115,7 @@ interface ActiveLoan {
 }
 
 export default function Transaksi() {
+  const { alert } = useDialog();
   const [activeMenu, setActiveMenu] = useState<string>("");
   
   // Pengajuan states
@@ -196,6 +198,59 @@ export default function Transaksi() {
   const [selectedLoanForNewExtension, setSelectedLoanForNewExtension] = useState<ActiveLoan | null>(null);
   const [newExtensionDate, setNewExtensionDate] = useState("");
 
+  // Cari Peminjam state
+  const [lookupNim, setLookupNim] = useState("");
+  const [lookupUser, setLookupUser] = useState<{ id: string; uid: string; displayName: string } | null>(null);
+  const [lookupLoans, setLookupLoans] = useState<BackendLoan[]>([]);
+  const [lookupState, setLookupState] = useState<"idle" | "loading" | "notfound" | "found" | "error">("idle");
+  const [lookupError, setLookupError] = useState<string | null>(null);
+
+  const fetchLookupLoans = async (userId: string) => {
+    const r = await apiFetch(
+      `${API_BASE}/api/loans?userId=${encodeURIComponent(userId)}&take=200`,
+      { credentials: "include" },
+    );
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = (await r.json()) as LoanListResponse;
+    setLookupLoans(data.items);
+  };
+
+  const handleLookupPeminjam = async () => {
+    const trimmed = lookupNim.trim();
+    if (!trimmed) return;
+    setLookupState("loading");
+    setLookupError(null);
+    try {
+      const r = await apiFetch(
+        `${API_BASE}/api/users?search=${encodeURIComponent(trimmed)}&take=10`,
+        { credentials: "include" },
+      );
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = (await r.json()) as {
+        items: Array<{ id: string; uid: string; displayName: string }>;
+      };
+      const match = data.items.find((u) => u.uid === trimmed) ?? data.items[0] ?? null;
+      if (!match) {
+        setLookupUser(null);
+        setLookupLoans([]);
+        setLookupState("notfound");
+        return;
+      }
+      setLookupUser(match);
+      await fetchLookupLoans(match.id);
+      setLookupState("found");
+    } catch (err) {
+      setLookupUser(null);
+      setLookupLoans([]);
+      setLookupError(err instanceof Error ? err.message : "Gagal mencari peminjam");
+      setLookupState("error");
+    }
+  };
+
+  const refetchLookupIfActive = () => {
+    if (lookupUser) void fetchLookupLoans(lookupUser.id);
+  };
+
   const handleSearch = async () => {
     setSearchState("loading");
     try {
@@ -273,8 +328,9 @@ export default function Transaksi() {
       }
       setSearchState("success");
       void fetchActiveLoans();
+      refetchLookupIfActive();
     } catch (err) {
-      alert(
+      await alert(
         `Gagal memproses peminjaman: ${
           err instanceof Error ? err.message : String(err)
         }`,
@@ -402,8 +458,9 @@ export default function Transaksi() {
       });
       setPraktikumSuccess(true);
       void fetchActiveLoans();
+      refetchLookupIfActive();
     } catch (err) {
-      alert(
+      await alert(
         `Gagal mencatat transaksi praktikum: ${
           err instanceof Error ? err.message : String(err)
         }`,
@@ -503,8 +560,11 @@ export default function Transaksi() {
   };
 
   // "Tandai Selesai" pada peminjaman terlambat — PATCH status ke RETURNED.
-  const handleMarkComplete = async (id: string) => {
-    const loan = activeLoans.find((l) => l.id === id);
+  const handleMarkComplete = async (idOrLoan: string | ActiveLoan) => {
+    const loan =
+      typeof idOrLoan === "string"
+        ? activeLoans.find((l) => l.id === idOrLoan)
+        : idOrLoan;
     if (!loan) return;
     try {
       const r = await apiFetch(
@@ -518,8 +578,9 @@ export default function Transaksi() {
       );
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       void fetchActiveLoans();
+      refetchLookupIfActive();
     } catch (err) {
-      alert(
+      await alert(
         `Gagal menandai selesai: ${
           err instanceof Error ? err.message : String(err)
         }`,
@@ -543,8 +604,9 @@ export default function Transaksi() {
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       setExtensionDialogOpen(false);
       void fetchActiveLoans();
+      refetchLookupIfActive();
     } catch (err) {
-      alert(
+      await alert(
         `Gagal memperpanjang: ${
           err instanceof Error ? err.message : String(err)
         }`,
@@ -582,8 +644,9 @@ export default function Transaksi() {
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       setReturnDialogOpen(false);
       void fetchActiveLoans();
+      refetchLookupIfActive();
     } catch (err) {
-      alert(
+      await alert(
         `Gagal mencatat pengembalian: ${
           err instanceof Error ? err.message : String(err)
         }`,
@@ -607,8 +670,9 @@ export default function Transaksi() {
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       setNewPerpanjangDialogOpen(false);
       void fetchActiveLoans();
+      refetchLookupIfActive();
     } catch (err) {
-      alert(
+      await alert(
         `Gagal memperpanjang: ${
           err instanceof Error ? err.message : String(err)
         }`,
@@ -1495,6 +1559,9 @@ export default function Transaksi() {
           </div>
         );
 
+      case "Cari Peminjam":
+        return renderCariPeminjam();
+
       case "Riwayat Denda":
         return <RiwayatDendaPanel />;
 
@@ -1503,12 +1570,282 @@ export default function Transaksi() {
     }
   };
 
+  const mapLoanToActive = (l: BackendLoan): ActiveLoan => ({
+    id: `TRX-${l.id.slice(0, 8).toUpperCase()}`,
+    backendId: l.id,
+    nama: l.borrower?.displayName ?? "-",
+    jenis: l.type === "TA" ? "Skripsi" : "Praktikum",
+    laptop: l.asset?.code ?? "-",
+    batasKembali: new Date(l.endDate),
+    whatsapp: l.borrower?.waNumber ?? "-",
+    status: deriveUrgency(l.endDate),
+    denda: typeof l.fine === "string" ? Number(l.fine) : l.fine,
+  });
+
+  const renderCariPeminjam = () => {
+    const ACTIVE_STATUSES: BackendLoanStatus[] = [
+      "PENDING",
+      "APPROVED_BY_DOSEN",
+      "APPROVED",
+      "ACTIVE",
+    ];
+    const FINAL_STATUSES: BackendLoanStatus[] = ["RETURNED", "REJECTED", "CANCELLED"];
+    const activeRows = lookupLoans.filter(
+      (l) => ACTIVE_STATUSES.includes(l.status) && deriveUrgency(l.endDate) !== "terlambat",
+    );
+    const overdueRows = lookupLoans.filter(
+      (l) =>
+        l.status === "OVERDUE" ||
+        (l.status === "ACTIVE" && deriveUrgency(l.endDate) === "terlambat"),
+    );
+    const riwayatRows = lookupLoans.filter((l) => FINAL_STATUSES.includes(l.status));
+
+    return (
+      <div>
+        <Card className="p-6 mb-6">
+          <h3 className="font-semibold text-lg mb-3">Cari Peminjam</h3>
+          <p className="text-sm text-gray-600 mb-4">
+            Masukkan NIM atau ID peminjam untuk melihat semua peminjaman laptop mereka.
+          </p>
+          <div className="flex gap-2">
+            <div className="flex-1 relative">
+              <Input
+                value={lookupNim}
+                onChange={(e) => setLookupNim(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void handleLookupPeminjam();
+                }}
+                placeholder="Scan atau masukkan NIM / ID peminjam"
+                className="pr-10"
+                disabled={lookupState === "loading"}
+              />
+              <Scan className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            </div>
+            <Button
+              onClick={handleLookupPeminjam}
+              disabled={!lookupNim.trim() || lookupState === "loading"}
+              className="px-8"
+            >
+              {lookupState === "loading" ? (
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Mencari…</>
+              ) : (
+                <><Search className="w-4 h-4 mr-2" />Cari</>
+              )}
+            </Button>
+          </div>
+        </Card>
+
+        {lookupState === "notfound" && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              Peminjam dengan NIM/ID "{lookupNim}" tidak ditemukan.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {lookupState === "error" && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{lookupError ?? "Terjadi kesalahan"}</AlertDescription>
+          </Alert>
+        )}
+
+        {lookupState === "found" && lookupUser && (
+          <>
+            <Card className="p-4 mb-4 bg-blue-50 border-blue-200">
+              <div className="flex items-center gap-3">
+                <CheckCircle className="w-5 h-5 text-blue-600" />
+                <div>
+                  <p className="font-semibold text-gray-900">{lookupUser.displayName}</p>
+                  <p className="text-sm text-gray-600">NIM / ID: {lookupUser.uid}</p>
+                </div>
+                <div className="ml-auto flex gap-2 text-sm">
+                  <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">
+                    {activeRows.length} aktif
+                  </Badge>
+                  {overdueRows.length > 0 && (
+                    <Badge className="bg-red-100 text-red-700 hover:bg-red-100">
+                      {overdueRows.length} terlambat
+                    </Badge>
+                  )}
+                  <Badge variant="outline">{riwayatRows.length} riwayat</Badge>
+                </div>
+              </div>
+            </Card>
+
+            {lookupLoans.length === 0 ? (
+              <Card className="p-8 text-center text-gray-500">
+                Peminjam ini belum pernah memiliki peminjaman laptop.
+              </Card>
+            ) : (
+              <div className="space-y-6">
+                <LookupSection title="Sedang Berjalan" rows={activeRows} kind="active" />
+                <LookupSection title="Terlambat" rows={overdueRows} kind="overdue" />
+                <LookupSection title="Riwayat" rows={riwayatRows} kind="history" />
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    );
+  };
+
+  const LookupSection = ({
+    title,
+    rows,
+    kind,
+  }: {
+    title: string;
+    rows: BackendLoan[];
+    kind: "active" | "overdue" | "history";
+  }) => {
+    if (rows.length === 0) return null;
+    return (
+      <Card className="overflow-hidden">
+        <div className={`px-4 py-3 border-b ${kind === "overdue" ? "bg-red-50" : kind === "history" ? "bg-gray-50" : "bg-blue-50"}`}>
+          <h3 className="font-semibold text-gray-900">
+            {title} <span className="text-sm font-normal text-gray-600">({rows.length})</span>
+          </h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50 text-xs text-gray-600 uppercase">
+              <tr>
+                <th className="px-4 py-2 text-left">ID</th>
+                <th className="px-4 py-2 text-left">Laptop</th>
+                <th className="px-4 py-2 text-left">Jenis</th>
+                <th className="px-4 py-2 text-left">Batas Kembali</th>
+                {kind !== "history" ? (
+                  <>
+                    <th className="px-4 py-2 text-left">
+                      {kind === "overdue" ? "Keterlambatan" : "Sisa Waktu"}
+                    </th>
+                    {kind === "overdue" && <th className="px-4 py-2 text-left">Denda</th>}
+                    <th className="px-4 py-2 text-left">Tindakan</th>
+                  </>
+                ) : (
+                  <>
+                    <th className="px-4 py-2 text-left">Tanggal Kembali</th>
+                    <th className="px-4 py-2 text-left">Status</th>
+                  </>
+                )}
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {rows.map((l) => {
+                const a = mapLoanToActive(l);
+                return (
+                  <tr key={l.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 text-sm font-medium">{a.id}</td>
+                    <td className="px-4 py-3 text-sm">{a.laptop}{l.asset?.name ? ` — ${l.asset.name}` : ""}</td>
+                    <td className="px-4 py-3 text-sm">{a.jenis}</td>
+                    <td className="px-4 py-3 text-sm">{formatDate(a.batasKembali)}</td>
+                    {kind === "active" && (
+                      <>
+                        <td className="px-4 py-3 text-sm">{getTimeRemaining(a.batasKembali)}</td>
+                        <td className="px-4 py-3 text-sm">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger className="inline-flex items-center justify-center gap-1 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3">
+                              Tindakan
+                              <ChevronDown className="w-4 h-4" />
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setSelectedLoanForReturn(a);
+                                  setAssetCondition("Baik");
+                                  setReturnNotes("");
+                                  setReturnDialogOpen(true);
+                                }}
+                              >
+                                <RotateCcw className="w-4 h-4 mr-2" />
+                                Kembalikan
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setSelectedLoanForNewExtension(a);
+                                  const newDate = new Date();
+                                  newDate.setDate(newDate.getDate() + 14);
+                                  setNewExtensionDate(newDate.toISOString().split("T")[0]!);
+                                  setNewPerpanjangDialogOpen(true);
+                                }}
+                              >
+                                <CalendarIcon className="w-4 h-4 mr-2" />
+                                Perpanjang
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </td>
+                      </>
+                    )}
+                    {kind === "overdue" && (
+                      <>
+                        <td className="px-4 py-3 text-sm">
+                          <span className="font-bold text-red-600">
+                            {getOverdueDays(a.batasKembali)} hari
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          {a.denda > 0 ? (
+                            <span className="font-bold text-red-600">
+                              Rp {a.denda.toLocaleString("id-ID")}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400">Rp 0</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          <Button
+                            onClick={() => handleMarkComplete(a)}
+                            size="sm"
+                            variant="outline"
+                          >
+                            Tandai Selesai
+                          </Button>
+                        </td>
+                      </>
+                    )}
+                    {kind === "history" && (
+                      <>
+                        <td className="px-4 py-3 text-sm">
+                          {l.returnDate ? formatDate(new Date(l.returnDate)) : "-"}
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          <Badge
+                            className={
+                              l.status === "RETURNED"
+                                ? "bg-gray-100 text-gray-700 hover:bg-gray-100"
+                                : l.status === "REJECTED"
+                                ? "bg-red-100 text-red-700 hover:bg-red-100"
+                                : "bg-amber-100 text-amber-700 hover:bg-amber-100"
+                            }
+                          >
+                            {l.status === "RETURNED"
+                              ? "Dikembalikan"
+                              : l.status === "REJECTED"
+                              ? "Ditolak"
+                              : "Dibatalkan"}
+                          </Badge>
+                        </td>
+                      </>
+                    )}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    );
+  };
+
   return (
     <PageLayout
-      title="Transaksi"
-      breadcrumbs={[{ label: "Transaksi" }]}
-      icon={<CreditCard className="w-8 h-8 text-white" />}
-      sidebarItems={['Pengajuan', 'Praktikum', 'Peminjaman Aktif', 'Jatuh Tempo', 'Terlambat', 'Riwayat Denda']}
+      title="Transaksi Laptop"
+      breadcrumbs={[{ label: "Transaksi Laptop" }]}
+      icon={<Laptop className="w-8 h-8 text-white" />}
+      sidebarItems={['Pengajuan', 'Praktikum', 'Peminjaman Aktif', 'Jatuh Tempo', 'Terlambat', 'Cari Peminjam', 'Riwayat Denda']}
       onSidebarItemClick={setActiveMenu}
       activeItem={activeMenu}
       hideHeader={!activeMenu}
@@ -1517,19 +1854,19 @@ export default function Transaksi() {
         <div className="max-w-md">
           {/* Icon Container */}
           <div className="w-[150px] h-[150px] bg-gradient-to-br from-blue-600 to-indigo-500 rounded-xl flex items-center justify-center mb-3">
-            <CreditCard className="w-11 h-11 text-white" />
+            <Laptop className="w-11 h-11 text-white" />
           </div>
-          
+
           {/* Title */}
-          <h2 className="font-bold text-gray-900 text-xl mb-1">Transaksi</h2>
+          <h2 className="font-bold text-gray-900 text-xl mb-1">Transaksi Laptop</h2>
           <p className="text-sm text-gray-500 mb-5">Proses transaksi peminjaman laptop</p>
-          
+
           {/* Button */}
           <button
             onClick={() => setActiveMenu("Pengajuan")}
             className="flex items-center gap-2 bg-blue-900 text-white px-6 py-3 rounded-lg hover:bg-blue-800 transition-colors font-medium shadow-sm hover:shadow-md"
           >
-            Masuk ke Transaksi
+            Masuk ke Transaksi Laptop
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
