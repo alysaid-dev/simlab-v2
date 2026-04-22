@@ -26,6 +26,7 @@ export const MODULE_ACCESS: Record<string, RoleName[]> = {
   // Kepala Lab
   "/persetujuan-kepala-lab": ["KEPALA_LAB"],
   "/history": ["KEPALA_LAB"],
+  "/inventaris-lab": ["KEPALA_LAB"],
   // Laboran
   "/persetujuan-laboran": ["LABORAN"],
   "/transaksi": ["LABORAN"],

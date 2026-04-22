@@ -121,6 +121,13 @@ const modules: ModuleTile[] = [
     icon: "history",
     link: "/history",
   },
+  {
+    title: "Inventaris Lab",
+    description: "Daftar laptop, peralatan, & habis pakai",
+    bgColor: "bg-gradient-to-br from-teal-600 to-emerald-500",
+    icon: "boxes",
+    link: "/inventaris-lab",
+  },
 ];
 
 export default function Dashboard() {

@@ -1,4 +1,4 @@
-import { Mail, Fingerprint, Users, Notebook, GraduationCap, Building, FileText, Wallet, Laptop, DoorOpen, FileCheck, Clock, UserCheck, Shield, ClipboardCheck, CreditCard, Package, ShoppingBag, Receipt, CheckCircle, Settings, Wrench, History } from 'lucide-react';
+import { Mail, Fingerprint, Users, Notebook, GraduationCap, Building, FileText, Wallet, Laptop, DoorOpen, FileCheck, Clock, UserCheck, Shield, ClipboardCheck, CreditCard, Package, ShoppingBag, Receipt, CheckCircle, Settings, Wrench, History, Boxes } from 'lucide-react';
 import { Link } from 'react-router';
 
 interface DashboardCardProps {
@@ -92,6 +92,8 @@ export function DashboardCard({ title, description, bgColor, icon, link }: Dashb
         return <Wrench {...iconProps} />;
       case 'history':
         return <History {...iconProps} />;
+      case 'boxes':
+        return <Boxes {...iconProps} />;
       default:
         return <FileText {...iconProps} />;
     }

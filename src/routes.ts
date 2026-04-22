@@ -16,6 +16,7 @@ import Akun from "./pages/Akun";
 import PengaturanAplikasi from "./pages/PengaturanAplikasi";
 import MonitorTransaksi from "./pages/MonitorTransaksi";
 import History from "./pages/History";
+import InventarisLab from "./pages/InventarisLab";
 import VerifyQR from "./pages/VerifyQR";
 import { ProtectedRoute, PublicOnlyRoute } from "./components/ProtectedRoute";
 
@@ -93,6 +94,10 @@ export const router = createBrowserRouter([
   {
     path: "/history",
     Component: guarded(History),
+  },
+  {
+    path: "/inventaris-lab",
+    Component: guarded(InventarisLab),
   },
   {
     path: "/verify/:hash",

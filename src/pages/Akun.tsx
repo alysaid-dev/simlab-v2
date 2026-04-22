@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Checkbox } from "../components/ui/checkbox";
 import { apiFetch } from "../lib/apiFetch";
+import { useDialog } from "../lib/dialog";
 
 type Peran =
   | "Super Admin"
@@ -139,6 +140,7 @@ const defaultRoles: Role[] = [
       Aset: { lihat: true, tambah: true, edit: true, hapus: true },
       "Habis Pakai": { lihat: true, tambah: true, edit: true, hapus: true },
       "Transaksi Habis Pakai": { lihat: true, tambah: true, edit: true, hapus: true },
+      "Inventaris Lab": { lihat: true, tambah: false, edit: false, hapus: false },
       Akun: { lihat: true, tambah: true, edit: true, hapus: true },
       "Pengaturan Aplikasi": { lihat: true, tambah: true, edit: true, hapus: true }
     }
@@ -153,6 +155,7 @@ const defaultRoles: Role[] = [
       Aset: { lihat: true, tambah: false, edit: true, hapus: false },
       "Habis Pakai": { lihat: true, tambah: true, edit: true, hapus: true },
       "Transaksi Habis Pakai": { lihat: true, tambah: true, edit: true, hapus: true },
+      "Inventaris Lab": { lihat: false, tambah: false, edit: false, hapus: false },
       Akun: { lihat: false, tambah: false, edit: false, hapus: false },
       "Pengaturan Aplikasi": { lihat: false, tambah: false, edit: false, hapus: false }
     }
@@ -167,6 +170,7 @@ const defaultRoles: Role[] = [
       Aset: { lihat: false, tambah: false, edit: false, hapus: false },
       "Habis Pakai": { lihat: false, tambah: false, edit: false, hapus: false },
       "Transaksi Habis Pakai": { lihat: false, tambah: false, edit: false, hapus: false },
+      "Inventaris Lab": { lihat: false, tambah: false, edit: false, hapus: false },
       Akun: { lihat: false, tambah: false, edit: false, hapus: false },
       "Pengaturan Aplikasi": { lihat: false, tambah: false, edit: false, hapus: false }
     }
@@ -181,6 +185,7 @@ const defaultRoles: Role[] = [
       Aset: { lihat: true, tambah: false, edit: false, hapus: false },
       "Habis Pakai": { lihat: false, tambah: false, edit: false, hapus: false },
       "Transaksi Habis Pakai": { lihat: false, tambah: false, edit: false, hapus: false },
+      "Inventaris Lab": { lihat: true, tambah: false, edit: false, hapus: false },
       Akun: { lihat: false, tambah: false, edit: false, hapus: false },
       "Pengaturan Aplikasi": { lihat: false, tambah: false, edit: false, hapus: false }
     }
@@ -188,6 +193,7 @@ const defaultRoles: Role[] = [
 ];
 
 export default function Akun() {
+  const { alert, confirm } = useDialog();
   const [activeMenu, setActiveMenu] = useState<string>("");
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [accountsLoading, setAccountsLoading] = useState(true);
@@ -313,7 +319,7 @@ export default function Akun() {
       }
       void fetchAccounts();
     } catch (err) {
-      alert(
+      await alert(
         `Gagal mengubah status: ${
           err instanceof Error ? err.message : String(err)
         }`,
@@ -359,7 +365,7 @@ export default function Akun() {
       await fetchAccounts();
       setAddModalOpen(false);
     } catch (err) {
-      alert(
+      await alert(
         `Gagal menambah akun: ${
           err instanceof Error ? err.message : String(err)
         }`,
@@ -419,7 +425,7 @@ export default function Akun() {
       setEditModalOpen(false);
       setSelectedAccount(null);
     } catch (err) {
-      alert(
+      await alert(
         `Gagal menyimpan perubahan: ${
           err instanceof Error ? err.message : String(err)
         }`,
@@ -435,13 +441,11 @@ export default function Akun() {
   const handleDeleteAccount = async (accountId: string) => {
     const account = accounts.find((a) => a.id === accountId);
     if (!account) return;
-    if (
-      !confirm(
-        `Nonaktifkan akun "${account.nama}"? Akun bisa diaktifkan lagi nanti.`,
-      )
-    ) {
-      return;
-    }
+    const ok = await confirm(
+      `Nonaktifkan akun "${account.nama}"? Akun bisa diaktifkan lagi nanti.`,
+      { destructive: true, confirmText: "Nonaktifkan" },
+    );
+    if (!ok) return;
     try {
       const r = await apiFetch(
         `${API_BASE}/api/users/${encodeURIComponent(account.backendId)}`,
@@ -453,7 +457,7 @@ export default function Akun() {
       }
       void fetchAccounts();
     } catch (err) {
-      alert(
+      await alert(
         `Gagal menonaktifkan akun: ${
           err instanceof Error ? err.message : String(err)
         }`,
@@ -535,7 +539,7 @@ export default function Akun() {
       await fetchAccounts();
       setShowChangeSuccess(true);
     } catch (err) {
-      alert(
+      await alert(
         `Gagal mengubah peran: ${
           err instanceof Error ? err.message : String(err)
         }`,
@@ -1018,7 +1022,7 @@ export default function Akun() {
         );
 
       case "Peran":
-        const modules = ["Dashboard", "Transaksi", "Aset", "Habis Pakai", "Transaksi Habis Pakai", "Akun", "Pengaturan Aplikasi"];
+        const modules = ["Dashboard", "Transaksi Laptop", "Manajemen Aset Laptop", "Transaksi Habis Pakai", "Akun", "Pengaturan Aplikasi"];
         const actions = ["lihat", "tambah", "edit", "hapus"];
         
         return (
