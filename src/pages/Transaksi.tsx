@@ -1,6 +1,7 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "../components/ui/dialog";
 import { useEffect, useState } from "react";
 import { PageLayout } from "../components/PageLayout";
+import { RiwayatDendaPanel } from "../components/RiwayatDendaPanel";
 import { CreditCard, Search, Loader2, CheckCircle, AlertCircle, Scan, Barcode, Calendar, Clock, MessageCircle, ChevronDown, RotateCcw, CalendarIcon } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -1494,6 +1495,9 @@ export default function Transaksi() {
           </div>
         );
 
+      case "Riwayat Denda":
+        return <RiwayatDendaPanel />;
+
       default:
         return null;
     }
@@ -1504,7 +1508,7 @@ export default function Transaksi() {
       title="Transaksi"
       breadcrumbs={[{ label: "Transaksi" }]}
       icon={<CreditCard className="w-8 h-8 text-white" />}
-      sidebarItems={['Pengajuan', 'Praktikum', 'Peminjaman Aktif', 'Jatuh Tempo', 'Terlambat']}
+      sidebarItems={['Pengajuan', 'Praktikum', 'Peminjaman Aktif', 'Jatuh Tempo', 'Terlambat', 'Riwayat Denda']}
       onSidebarItemClick={setActiveMenu}
       activeItem={activeMenu}
       hideHeader={!activeMenu}

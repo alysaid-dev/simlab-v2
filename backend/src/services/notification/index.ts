@@ -263,6 +263,27 @@ export async function notifyLoanOverdueToMahasiswa(
   return dispatch(recipient, t.loanOverdueToMahasiswa(params));
 }
 
+export async function notifyLoanReturnedToMahasiswa(
+  recipient: Recipient,
+  params: t.LoanReturnedToMahasiswaParams,
+): Promise<ChannelResults> {
+  return dispatch(recipient, t.loanReturnedToMahasiswa(params));
+}
+
+export async function notifyLoanExtendedToMahasiswa(
+  recipient: Recipient,
+  params: t.LoanExtendedToMahasiswaParams,
+): Promise<ChannelResults> {
+  return dispatch(recipient, t.loanExtendedToMahasiswa(params));
+}
+
+export async function notifyConsumableHandoverToMahasiswa(
+  recipient: Recipient,
+  params: t.ConsumableHandoverParams,
+): Promise<ChannelResults> {
+  return dispatch(recipient, t.consumableHandoverToMahasiswa(params));
+}
+
 export async function notifyCancelledBySystemToMahasiswa(
   recipient: Recipient,
   params: t.CancelledBySystemParams,

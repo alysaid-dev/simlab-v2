@@ -2,10 +2,12 @@ import cron, { type ScheduledTask } from "node-cron";
 import { LoanStatus } from "@prisma/client";
 import { prisma } from "../../config/database.js";
 import { env } from "../../config/env.js";
+import { appSettingsService } from "../appSettings.service.js";
 import {
   notifyLoanReminderH0ToMahasiswa,
   notifyLoanReminderH1ToMahasiswa,
 } from "./index.js";
+import { fmtRupiah } from "../../utils/format.js";
 
 /**
  * Compute a [start, end) UTC window that represents a calendar day relative to
@@ -51,18 +53,22 @@ async function runReminderJob(kind: ReminderKind): Promise<ReminderRunResult> {
     `[scheduler] ${kind} reminder scan for loans ending between ${start.toISOString()} and ${end.toISOString()}`,
   );
 
-  const loans = await prisma.loan.findMany({
-    where: {
-      status: LoanStatus.ACTIVE,
-      endDate: { gte: start, lt: end },
-    },
-    include: {
-      borrower: {
-        select: { id: true, displayName: true, email: true, waNumber: true },
+  const [loans, settings] = await Promise.all([
+    prisma.loan.findMany({
+      where: {
+        status: LoanStatus.ACTIVE,
+        endDate: { gte: start, lt: end },
       },
-      asset: { select: { id: true, name: true, code: true } },
-    },
-  });
+      include: {
+        borrower: {
+          select: { id: true, displayName: true, email: true, waNumber: true },
+        },
+        asset: { select: { id: true, name: true, code: true } },
+      },
+    }),
+    appSettingsService.get(),
+  ]);
+  const dendaPerHari = fmtRupiah(settings.lateFeePerDayIdr);
 
   let sent = 0;
   let failed = 0;
@@ -90,6 +96,7 @@ async function runReminderJob(kind: ReminderKind): Promise<ReminderRunResult> {
       kodeLaptop: loan.asset.code,
       namaLaptop: loan.asset.name,
       tanggalJatuhTempo,
+      dendaPerHari,
     };
 
     const result =

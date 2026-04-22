@@ -1010,6 +1010,129 @@ ${waDetails([
 }
 
 // ---------------------------------------------------------------------------
+// 16. Mahasiswa — pengembalian laptop tercatat (laboran terima kembali)
+// ---------------------------------------------------------------------------
+export interface LoanReturnedToMahasiswaParams {
+  namaMahasiswa: string;
+  kodeLaptop: string;
+  namaLaptop: string;
+  tanggalKembali: string;
+  kondisi: string;
+  diterimaOleh: string;
+  catatan?: string;
+  /** Hari keterlambatan. 0/undefined = tepat waktu, blok denda disembunyikan. */
+  hariTelat?: number;
+  /** Total denda (pre-formatted, mis. "Rp50.000"). Dihitung caller. */
+  totalDenda?: string;
+  linkSimlab?: string;
+}
+
+export function loanReturnedToMahasiswa(p0: LoanReturnedToMahasiswaParams): NotificationTemplate {
+  const link = p0.linkSimlab ?? SIMLAB_URL;
+  const isLate = (p0.hariTelat ?? 0) > 0 && !!p0.totalDenda;
+  const subject = '[SIMLAB] Konfirmasi Pengembalian Laptop';
+  const html = emailLayout({
+    greeting: `Yth. ${p0.namaMahasiswa}`,
+    bodyHtml:
+      p('Pengembalian laptop Anda telah berhasil dicatat oleh laboran. Berikut detail pengembalian:') +
+      detailTable([
+        ['Kode Laptop', p0.kodeLaptop],
+        ['Laptop', p0.namaLaptop],
+        ['Tanggal Kembali', p0.tanggalKembali],
+        ['Kondisi Saat Kembali', p0.kondisi],
+        ['Diterima Oleh', p0.diterimaOleh],
+        ...(p0.catatan ? ([['Catatan', p0.catatan]] as Array<[string, string]>) : []),
+      ]) +
+      (isLate
+        ? `<div style="margin:16px 0;padding:12px 16px;background:#fee2e2;border-left:4px solid #dc2626;border-radius:4px;font-size:13px;line-height:1.6;color:#7f1d1d">
+             Terdapat keterlambatan <strong>${p0.hariTelat} hari</strong>. Denda yang dikenakan: <strong>${p0.totalDenda}</strong>. Mohon segera melunasi denda di laboratorium.
+           </div>`
+        : '') +
+      p('Terima kasih telah mengembalikan laptop sesuai prosedur. Apabila Anda sedang mempersiapkan sidang, silakan ajukan <strong>Surat Keterangan Bebas Laboratorium</strong> melalui SIMLAB jika sudah tidak memiliki tanggungan.'),
+    linkSimlab: link,
+    linkLabel: 'Buka SIMLAB',
+  });
+  const whatsapp = `${WA_SALAM}
+
+*Pengembalian Laptop Tercatat*
+
+Yth. ${p0.namaMahasiswa},
+Pengembalian laptop Anda telah berhasil dicatat oleh laboran.
+
+${waDetails([
+  ['🏷️ Kode', p0.kodeLaptop],
+  ['💻 Laptop', p0.namaLaptop],
+  ['📅 Tanggal Kembali', p0.tanggalKembali],
+  ['🔧 Kondisi', p0.kondisi],
+  ['👤 Diterima Oleh', p0.diterimaOleh],
+  ...(p0.catatan ? ([['📝 Catatan', p0.catatan]] as Array<[string, string]>) : []),
+])}
+${isLate ? `\n⚠️ Terlambat ${p0.hariTelat} hari — denda: *${p0.totalDenda}*. Mohon segera dilunasi di laboratorium.\n` : ''}
+Terima kasih. Jika akan sidang, silakan ajukan Surat Bebas Lab melalui SIMLAB bila sudah tidak ada tanggungan.
+
+🔗 ${link}${WA_FOOTER}`;
+  return { subject, html, whatsapp };
+}
+
+// ---------------------------------------------------------------------------
+// 17. Mahasiswa — perpanjangan peminjaman laptop disetujui
+// ---------------------------------------------------------------------------
+export interface LoanExtendedToMahasiswaParams {
+  namaMahasiswa: string;
+  kodeLaptop: string;
+  namaLaptop: string;
+  tanggalLama: string;
+  tanggalBaru: string;
+  diprosesOleh: string;
+  dendaPerHari?: string;
+  linkSimlab?: string;
+}
+
+export function loanExtendedToMahasiswa(p0: LoanExtendedToMahasiswaParams): NotificationTemplate {
+  const link = p0.linkSimlab ?? SIMLAB_URL;
+  const denda = p0.dendaPerHari ?? LATE_FEE_PER_DAY;
+  const subject = '[SIMLAB] Perpanjangan Peminjaman Laptop Disetujui';
+  const html = emailLayout({
+    greeting: `Yth. ${p0.namaMahasiswa}`,
+    bodyHtml:
+      p('Perpanjangan peminjaman laptop Anda telah disetujui. Berikut detail perubahan tanggal:') +
+      detailTable([
+        ['Kode Laptop', p0.kodeLaptop],
+        ['Laptop', p0.namaLaptop],
+        ['Tanggal Jatuh Tempo Sebelumnya', p0.tanggalLama],
+        ['Tanggal Jatuh Tempo Baru', p0.tanggalBaru],
+        ['Diproses Oleh', p0.diprosesOleh],
+      ]) +
+      p('Mohon kembalikan atau perpanjang kembali paling lambat tanggal baru di atas.') +
+      `<div style="margin:16px 0;padding:12px 16px;background:#fef3c7;border-left:4px solid #f59e0b;border-radius:4px;font-size:13px;line-height:1.6;color:#78350f">
+         Keterlambatan dari tanggal baru akan tetap dikenakan denda sebesar <strong>${denda} per hari</strong>.
+       </div>`,
+    linkSimlab: link,
+    linkLabel: 'Pantau Peminjaman',
+  });
+  const whatsapp = `${WA_SALAM}
+
+*Perpanjangan Peminjaman Disetujui*
+
+Yth. ${p0.namaMahasiswa},
+Perpanjangan peminjaman laptop Anda telah disetujui.
+
+${waDetails([
+  ['🏷️ Kode', p0.kodeLaptop],
+  ['💻 Laptop', p0.namaLaptop],
+  ['📅 Jatuh Tempo Lama', p0.tanggalLama],
+  ['📅 Jatuh Tempo Baru', p0.tanggalBaru],
+  ['👤 Diproses Oleh', p0.diprosesOleh],
+])}
+
+Mohon kembalikan atau perpanjang kembali paling lambat tanggal baru di atas.
+⚠️ Keterlambatan dari tanggal baru tetap dikenakan denda ${denda}/hari.
+
+🔗 ${link}${WA_FOOTER}`;
+  return { subject, html, whatsapp };
+}
+
+// ---------------------------------------------------------------------------
 // Laboran — notifikasi pengajuan surat bebas lab baru dari mahasiswa
 // ---------------------------------------------------------------------------
 export interface ClearanceCreatedToLaboranParams {
@@ -1135,6 +1258,85 @@ Mohon maaf, permohonan surat bebas lab Anda *ditolak* oleh ${p0.tahap} (${p0.dit
 Alasan: ${p0.alasan}
 
 Silakan perbaiki dan ajukan kembali melalui SIMLAB bila diperlukan.
+🔗 ${link}${WA_FOOTER}`;
+  return { subject, html, whatsapp };
+}
+
+// ---------------------------------------------------------------------------
+// Mahasiswa/pengguna — serah terima barang habis pakai tercatat
+// ---------------------------------------------------------------------------
+export interface ConsumableHandoverItemParam {
+  nama: string;
+  jumlah: number;
+  satuan: string;
+}
+
+export interface ConsumableHandoverParams {
+  namaMahasiswa: string;
+  nim: string;
+  items: ConsumableHandoverItemParam[];
+  totalItem: number;
+  diserahkanOleh: string;
+  waktuTransaksi: string;
+  linkSimlab?: string;
+}
+
+export function consumableHandoverToMahasiswa(p0: ConsumableHandoverParams): NotificationTemplate {
+  const link = p0.linkSimlab ?? SIMLAB_URL;
+  const itemsHtml = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:16px 0;border:1px solid #e2e8f0">
+    <tr style="background:#f8fafc">
+      <th style="padding:10px 12px;border:1px solid #e2e8f0;text-align:left;font-size:13px;font-weight:600">Nama Barang</th>
+      <th style="padding:10px 12px;border:1px solid #e2e8f0;text-align:right;font-size:13px;font-weight:600;width:20%">Jumlah</th>
+      <th style="padding:10px 12px;border:1px solid #e2e8f0;text-align:left;font-size:13px;font-weight:600;width:20%">Satuan</th>
+    </tr>
+    ${p0.items
+      .map(
+        (it) => `<tr>
+          <td style="padding:10px 12px;border:1px solid #e2e8f0;font-size:14px">${it.nama}</td>
+          <td style="padding:10px 12px;border:1px solid #e2e8f0;font-size:14px;text-align:right;font-weight:600">${it.jumlah}</td>
+          <td style="padding:10px 12px;border:1px solid #e2e8f0;font-size:14px">${it.satuan}</td>
+        </tr>`,
+      )
+      .join('')}
+  </table>`;
+
+  const subject = '[SIMLAB] Konfirmasi Pengambilan Barang Habis Pakai';
+  const html = emailLayout({
+    greeting: `Yth. ${p0.namaMahasiswa}`,
+    bodyHtml:
+      p('Pengambilan barang habis pakai Anda telah berhasil dicatat oleh laboran. Berikut detail transaksi:') +
+      detailTable([
+        ['Nama', p0.namaMahasiswa],
+        ['NIM / ID', p0.nim],
+        ['Waktu Transaksi', p0.waktuTransaksi],
+        ['Diserahkan Oleh', p0.diserahkanOleh],
+        ['Total Item', `${p0.totalItem}`],
+      ]) +
+      p('<strong>Rincian Barang:</strong>') +
+      itemsHtml +
+      p('Terima kasih. Jika ada ketidaksesuaian, mohon segera menghubungi laboran.'),
+    linkSimlab: link,
+    linkLabel: 'Buka SIMLAB',
+  });
+  const whatsapp = `${WA_SALAM}
+
+*Pengambilan Barang Habis Pakai Tercatat*
+
+Yth. ${p0.namaMahasiswa},
+Pengambilan barang habis pakai Anda telah berhasil dicatat.
+
+${waDetails([
+  ['👤 Nama', p0.namaMahasiswa],
+  ['🆔 NIM/ID', p0.nim],
+  ['🕒 Waktu', p0.waktuTransaksi],
+  ['👨‍💼 Diserahkan Oleh', p0.diserahkanOleh],
+  ['📦 Total Item', `${p0.totalItem}`],
+])}
+
+*Rincian Barang:*
+${p0.items.map((it) => `• ${it.nama} — ${it.jumlah} ${it.satuan}`).join('\n')}
+
+Terima kasih. Jika ada ketidaksesuaian, mohon segera menghubungi laboran.
 🔗 ${link}${WA_FOOTER}`;
   return { subject, html, whatsapp };
 }
