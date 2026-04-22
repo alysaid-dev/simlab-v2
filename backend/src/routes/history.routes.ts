@@ -1,12 +1,12 @@
 import { Router } from "express";
 import { historyController } from "../controllers/history.controller.js";
-import { requireAuth, requireRoleAtLeast } from "../middleware/auth.js";
+import { requireAuth, requireRole } from "../middleware/auth.js";
 
 const router = Router();
 
 // Seluruh modul History hanya untuk Kepala Lab & Super Admin.
 router.use(requireAuth);
-router.use(requireRoleAtLeast("KEPALA_LAB"));
+router.use(requireRole("KEPALA_LAB", "SUPER_ADMIN"));
 
 router.get("/loans/ta", historyController.listLoansTA);
 router.get("/loans/practicum", historyController.listLoansPracticum);

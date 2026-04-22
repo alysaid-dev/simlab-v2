@@ -7,7 +7,7 @@ import { prisma } from "../config/database.js";
 import { reservationsService } from "../services/reservations.service.js";
 import { roomsService } from "../services/rooms.service.js";
 import { usersService } from "../services/users.service.js";
-import { hasRoleAtLeast } from "../middleware/auth.js";
+import { hasAnyRole } from "../middleware/auth.js";
 import { HttpError } from "../middleware/errorHandler.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 
@@ -79,7 +79,7 @@ export const reservationsController = {
     const reservation = await reservationsService.getById(req.params.id!);
     const requester = await usersService.getByUid(req.user!.uid);
     const isOwner = reservation.userId === requester.id;
-    if (!isOwner && !hasRoleAtLeast(req.user!, "LABORAN")) {
+    if (!isOwner && !hasAnyRole(req.user!, "LABORAN", "KEPALA_LAB", "SUPER_ADMIN")) {
       throw new HttpError(403, "Anda tidak berhak melihat reservasi ini");
     }
     res.json(reservation);

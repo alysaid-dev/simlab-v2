@@ -27,7 +27,7 @@ export interface ShibbolethUser {
 }
 
 // ---------------------------------------------------------------------------
-// Roles & hierarchy
+// Roles
 // ---------------------------------------------------------------------------
 
 /** Mirrors Prisma's RoleName enum. Source of truth for RBAC. */
@@ -38,19 +38,6 @@ export type Role =
   | "LABORAN"
   | "STAFF"
   | "MAHASISWA";
-
-/**
- * Hierarchy ranks — higher = more authority. Used by `hasRoleAtLeast()`.
- * SUPER_ADMIN > KEPALA_LAB > DOSEN > LABORAN > STAFF > MAHASISWA.
- */
-const ROLE_RANK: Record<Role, number> = {
-  MAHASISWA: 0,
-  STAFF: 1,
-  LABORAN: 2,
-  DOSEN: 3,
-  KEPALA_LAB: 4,
-  SUPER_ADMIN: 5,
-};
 
 /**
  * Exact-match map from canonical group CN / affiliation value → Role.
@@ -149,17 +136,14 @@ async function fetchDbRoles(uid: string): Promise<Role[]> {
 }
 
 /**
- * True if `user` holds any role at or above `min` in the hierarchy.
- * A user with no recognized role always returns false.
+ * True if `user` holds any of the listed roles. Use this instead of any
+ * hierarchy-based check — SIMLAB roles are different functions (LABORAN ≠
+ * DOSEN ≠ KEPALA_LAB), not stacked authorities, so ranking them invites
+ * accidental over-granting (e.g. DOSEN passing a LABORAN threshold).
  */
-export function hasRoleAtLeast(user: ShibbolethUser, min: Role): boolean {
-  const roles = deriveRoles(user);
-  if (roles.size === 0) return false;
-  const minRank = ROLE_RANK[min];
-  for (const r of roles) {
-    if (ROLE_RANK[r] >= minRank) return true;
-  }
-  return false;
+export function hasAnyRole(user: ShibbolethUser, ...roles: Role[]): boolean {
+  const userRoles = deriveRoles(user);
+  return roles.some((r) => userRoles.has(r));
 }
 
 // ---------------------------------------------------------------------------
@@ -382,9 +366,10 @@ export function requireAuth(
 
 /**
  * Allows the request only if the user holds at least one of `roles` (exact).
- * Example: requireRole("LABORAN", "KEPALA_LAB", "ADMIN", "SUPER_ADMIN").
+ * Example: requireRole("LABORAN", "KEPALA_LAB", "SUPER_ADMIN").
  *
- * For "minimum role" semantics use `requireRoleAtLeast` instead.
+ * Always prefer this (whitelist) over any hierarchy/threshold check — SIMLAB
+ * roles are distinct functions, not stacked authorities.
  */
 export function requireRole(...roles: Role[]) {
   return function (req: Request, res: Response, next: NextFunction): void {
@@ -405,20 +390,3 @@ export function requireRole(...roles: Role[]) {
   };
 }
 
-/** Allows the request only if the user holds a role at or above `min`. */
-export function requireRoleAtLeast(min: Role) {
-  return function (req: Request, res: Response, next: NextFunction): void {
-    if (!req.user) {
-      res.status(401).json({ error: "Unauthorized" });
-      return;
-    }
-    if (!hasRoleAtLeast(req.user, min)) {
-      res.status(403).json({
-        error: "Forbidden",
-        message: `Akses ditolak. Dibutuhkan peran minimum: ${min}`,
-      });
-      return;
-    }
-    next();
-  };
-}

@@ -2,7 +2,7 @@ import { EquipmentLoanStatus } from "@prisma/client";
 import { z } from "zod";
 import { equipmentLoansService } from "../services/equipmentLoans.service.js";
 import { usersService } from "../services/users.service.js";
-import { hasRoleAtLeast } from "../middleware/auth.js";
+import { hasAnyRole } from "../middleware/auth.js";
 import { HttpError } from "../middleware/errorHandler.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { fmtDateTime } from "../utils/format.js";
@@ -70,7 +70,7 @@ export const equipmentLoansController = {
     const loan = await equipmentLoansService.getById(req.params.id!);
     const requester = await usersService.getByUid(req.user!.uid);
     const isOwner = loan.userId === requester.id;
-    if (!isOwner && !hasRoleAtLeast(req.user!, "LABORAN")) {
+    if (!isOwner && !hasAnyRole(req.user!, "LABORAN", "KEPALA_LAB", "SUPER_ADMIN")) {
       throw new HttpError(403, "Anda tidak berhak melihat peminjaman ini");
     }
     res.json(loan);
@@ -79,13 +79,13 @@ export const equipmentLoansController = {
   create: asyncHandler(async (req, res) => {
     const body = createBody.parse(req.body);
     const requester = await usersService.getByUid(req.user!.uid);
-    const isLaboran = hasRoleAtLeast(req.user!, "LABORAN");
+    const isOperator = hasAnyRole(req.user!, "LABORAN", "KEPALA_LAB", "SUPER_ADMIN");
 
     let ownerId = requester.id;
-    if (body.userUid && isLaboran) {
+    if (body.userUid && isOperator) {
       const owner = await usersService.getByUid(body.userUid);
       ownerId = owner.id;
-    } else if (body.userUid && !isLaboran) {
+    } else if (body.userUid && !isOperator) {
       throw new HttpError(403, "Hanya laboran yang bisa membuat peminjaman atas nama peminjam lain");
     }
 

@@ -4,7 +4,7 @@ import { prisma } from "../config/database.js";
 import { loansService } from "../services/loans.service.js";
 import { usersService } from "../services/users.service.js";
 import { appSettingsService } from "../services/appSettings.service.js";
-import { hasRoleAtLeast } from "../middleware/auth.js";
+import { hasAnyRole } from "../middleware/auth.js";
 import { HttpError } from "../middleware/errorHandler.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { CONDITION_LABEL, fmtDateTime, fmtRupiah } from "../utils/format.js";
@@ -77,7 +77,7 @@ export const loansController = {
     const loan = await loansService.getById(req.params.id!);
     const requester = await usersService.getByUid(req.user!.uid);
     const isOwner = loan.userId === requester.id;
-    if (!isOwner && !hasRoleAtLeast(req.user!, "LABORAN")) {
+    if (!isOwner && !hasAnyRole(req.user!, "LABORAN", "KEPALA_LAB", "SUPER_ADMIN")) {
       throw new HttpError(403, "Anda tidak berhak melihat peminjaman ini");
     }
     res.json(loan);
@@ -87,9 +87,9 @@ export const loansController = {
     const body = createBody.parse(req.body);
     const requester = await usersService.getByUid(req.user!.uid);
 
-    // Only laboran+ may book on someone else's behalf.
+    // Only laboran/kalab/super admin may book on someone else's behalf.
     const targetUserId =
-      body.userId && hasRoleAtLeast(req.user!, "LABORAN")
+      body.userId && hasAnyRole(req.user!, "LABORAN", "KEPALA_LAB", "SUPER_ADMIN")
         ? body.userId
         : requester.id;
 

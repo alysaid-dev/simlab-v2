@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../config/database.js";
 import { clearancesService } from "../services/clearances.service.js";
 import { usersService } from "../services/users.service.js";
-import { hasRoleAtLeast } from "../middleware/auth.js";
+import { hasAnyRole } from "../middleware/auth.js";
 import { HttpError } from "../middleware/errorHandler.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import {
@@ -70,7 +70,7 @@ export const clearancesController = {
     const letter = await clearancesService.getById(req.params.id!);
     const requester = await usersService.getByUid(req.user!.uid);
     const isOwner = letter.userId === requester.id;
-    if (!isOwner && !hasRoleAtLeast(req.user!, "LABORAN")) {
+    if (!isOwner && !hasAnyRole(req.user!, "LABORAN", "KEPALA_LAB", "SUPER_ADMIN")) {
       throw new HttpError(403, "Anda tidak berhak melihat surat ini");
     }
     res.json(letter);
@@ -260,7 +260,7 @@ export const clearancesController = {
     const letter = await clearancesService.getById(req.params.id!);
     const requester = await usersService.getByUid(req.user!.uid);
     const isOwner = letter.userId === requester.id;
-    if (!isOwner && !hasRoleAtLeast(req.user!, "LABORAN")) {
+    if (!isOwner && !hasAnyRole(req.user!, "LABORAN", "KEPALA_LAB", "SUPER_ADMIN")) {
       throw new HttpError(403, "Anda tidak berhak mengunduh surat ini");
     }
     const pdfPath = await clearancesService.ensurePdf(letter.id);

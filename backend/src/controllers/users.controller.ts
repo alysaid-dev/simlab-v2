@@ -1,7 +1,7 @@
 import { RoleName } from "@prisma/client";
 import { z } from "zod";
 import { usersService } from "../services/users.service.js";
-import { hasRoleAtLeast } from "../middleware/auth.js";
+import { hasAnyRole } from "../middleware/auth.js";
 import { HttpError } from "../middleware/errorHandler.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 
@@ -41,10 +41,13 @@ export const usersController = {
   // (untuk dropdown dosen pembimbing di form peminjaman laptop).
   list: asyncHandler(async (req, res) => {
     const q = listQuery.parse(req.query);
-    if (q.role !== RoleName.DOSEN && !hasRoleAtLeast(req.user!, "LABORAN")) {
+    if (
+      q.role !== RoleName.DOSEN &&
+      !hasAnyRole(req.user!, "LABORAN", "KEPALA_LAB", "SUPER_ADMIN")
+    ) {
       throw new HttpError(
         403,
-        "Akses ditolak. Dibutuhkan peran minimum: LABORAN",
+        "Akses ditolak. Dibutuhkan peran: LABORAN/KEPALA_LAB/SUPER_ADMIN",
       );
     }
     const result = await usersService.list(q);
@@ -72,7 +75,7 @@ export const usersController = {
     const requestedId = req.params.id!;
     const requester = await usersService.getByUid(req.user!.uid);
     const isSelf = requester.id === requestedId;
-    if (!isSelf && !hasRoleAtLeast(req.user!, "LABORAN")) {
+    if (!isSelf && !hasAnyRole(req.user!, "LABORAN", "KEPALA_LAB", "SUPER_ADMIN")) {
       throw new HttpError(403, "Anda hanya dapat melihat profil Anda sendiri");
     }
     const user = await usersService.getById(requestedId);
