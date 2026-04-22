@@ -7,8 +7,7 @@
 
 export const SIMLAB_URL = 'https://statistics.uii.ac.id/simlab';
 export const LATE_FEE_PER_DAY = 'Rp25.000';
-export const LOGO_URL =
-  'https://raw.githubusercontent.com/alysaid-dev/simlab-v2/main/src/assets/logo-statistika.png';
+export const LOGO_URL = `${SIMLAB_URL}/logo-statistika.png`;
 
 export interface NotificationTemplate {
   subject: string;
