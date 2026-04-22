@@ -19,6 +19,7 @@ import { Label } from "../components/ui/label";
 import { Card } from "../components/ui/card";
 import { Alert, AlertDescription } from "../components/ui/alert";
 import { useAuth } from "@/contexts/AuthContext";
+import { useDialog } from "../lib/dialog";
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
 
@@ -44,6 +45,7 @@ interface LaboratoryItem {
 
 export default function PengaturanAplikasi() {
   const { user } = useAuth();
+  const { confirm } = useDialog();
   const isSuperAdmin = user?.roles?.includes("SUPER_ADMIN") ?? false;
 
   const [activeMenu, setActiveMenu] = useState<string>("");
@@ -275,8 +277,12 @@ export default function PengaturanAplikasi() {
     }
   };
 
-  const handleDeleteHoliday = (holidayId: number) => {
-    if (confirm("Apakah Anda yakin ingin menghapus hari libur ini?")) {
+  const handleDeleteHoliday = async (holidayId: number) => {
+    if (
+      await confirm("Apakah Anda yakin ingin menghapus hari libur ini?", {
+        destructive: true,
+      })
+    ) {
       setHolidays(holidays.filter((h) => h.id !== holidayId));
     }
   };

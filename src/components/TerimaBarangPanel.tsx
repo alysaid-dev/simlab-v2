@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { apiFetch } from "../lib/apiFetch";
 import { formatDateTime } from "../lib/format";
+import { useDialog } from "../lib/dialog";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
@@ -51,6 +52,7 @@ interface CartLine {
 }
 
 export function TerimaBarangPanel({ onChanged }: { onChanged?: () => void }) {
+  const { alert } = useDialog();
   const [items, setItems] = useState<Item[]>([]);
   const [itemsError, setItemsError] = useState<string | null>(null);
 
@@ -184,7 +186,7 @@ export function TerimaBarangPanel({ onChanged }: { onChanged?: () => void }) {
       await refetchItems();
       onChanged?.();
     } catch (err) {
-      alert(
+      await alert(
         `Gagal mencatat penerimaan: ${err instanceof Error ? err.message : String(err)}`,
       );
     } finally {

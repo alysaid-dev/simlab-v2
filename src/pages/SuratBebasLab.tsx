@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { PageLayout } from "../components/PageLayout";
 import { FileCheck, Download, AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useDialog } from "../lib/dialog";
 
 type View = "pengajuan" | "riwayat";
 
@@ -111,6 +112,7 @@ interface SuratRecord {
 
 export default function SuratBebasLab() {
   const { user } = useAuth();
+  const { alert } = useDialog();
   const [currentView, setCurrentView] = useState<View | null>(null);
   const [formData, setFormData] = useState({
     nama: "",
@@ -248,14 +250,14 @@ export default function SuratBebasLab() {
           | null;
         throw new Error(errBody?.message ?? `HTTP ${res.status}`);
       }
-      alert("Pengajuan Surat Bebas Lab berhasil dikirim!");
+      await alert("Pengajuan Surat Bebas Lab berhasil dikirim!", { title: "Berhasil" });
       setFormData((prev) => ({ ...prev, tanggalSidang: "" }));
       // Refresh obligations sekaligus (kalau ada tanggungan baru muncul
       // karena race — biar UI akurat).
       setObligations(null);
       setCurrentView("riwayat");
     } catch (err) {
-      alert(
+      await alert(
         `Gagal mengirim pengajuan: ${
           err instanceof Error ? err.message : String(err)
         }`,

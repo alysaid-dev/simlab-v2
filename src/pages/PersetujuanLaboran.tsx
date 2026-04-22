@@ -3,6 +3,7 @@ import { PageLayout } from "../components/PageLayout";
 import { ClipboardCheck, X, Construction, Loader2, AlertTriangle } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiFetch } from "../lib/apiFetch";
+import { useDialog } from "../lib/dialog";
 
 type View = "peminjaman-ruangan" | "bebas-lab";
 
@@ -88,6 +89,7 @@ interface BebasLabRecord {
 
 export default function PersetujuanLaboran() {
   const { user } = useAuth();
+  const { alert, confirm } = useDialog();
   const isSuperAdmin = user?.roles?.includes("SUPER_ADMIN") ?? false;
   const [currentView, setCurrentView] = useState<View | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -256,14 +258,13 @@ export default function PersetujuanLaboran() {
     id: string,
     setuju: boolean,
   ) => {
-    if (
-      !confirm(
-        setuju
-          ? "Setujui reservasi ini dan teruskan ke Kepala Lab?"
-          : "Tolak reservasi ini?",
-      )
-    )
-      return;
+    const ok = await confirm(
+      setuju
+        ? "Setujui reservasi ini dan teruskan ke Kepala Lab?"
+        : "Tolak reservasi ini?",
+      setuju ? {} : { destructive: true, confirmText: "Tolak" },
+    );
+    if (!ok) return;
     const status = setuju ? "CHECKED" : "REJECTED";
     try {
       const res = await apiFetch(
@@ -278,7 +279,7 @@ export default function PersetujuanLaboran() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       void fetchReservations();
     } catch (err) {
-      alert(
+      await alert(
         `Gagal: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
@@ -311,7 +312,7 @@ export default function PersetujuanLaboran() {
     const isApprove = tindakanForm.tindakan === "Setujui";
     const nextStatus = isApprove ? "PENDING_KEPALA_LAB" : "REJECTED";
     if (!isApprove && !tindakanForm.keterangan.trim()) {
-      alert("Alasan penolakan wajib diisi");
+      await alert("Alasan penolakan wajib diisi");
       return;
     }
     setSubmitting(true);
@@ -332,7 +333,7 @@ export default function PersetujuanLaboran() {
         const err = (await res.json().catch(() => null)) as { message?: string } | null;
         throw new Error(err?.message ?? `HTTP ${res.status}`);
       }
-      alert(
+      await alert(
         `Permohonan dari ${selectedRecord.namaMahasiswa} telah ${
           tindakanForm.tindakan === "Setujui" ? "disetujui" : "ditolak"
         }`,
@@ -341,7 +342,7 @@ export default function PersetujuanLaboran() {
       setTindakanForm({ tindakan: "", keterangan: "" });
       void fetchClearances();
     } catch (err) {
-      alert(
+      await alert(
         `Gagal memproses: ${err instanceof Error ? err.message : String(err)}`,
       );
     } finally {

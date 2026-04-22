@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { apiFetch } from "../lib/apiFetch";
 import { formatDateTime } from "../lib/format";
+import { useDialog } from "../lib/dialog";
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
 
@@ -44,6 +45,7 @@ interface ListResponse<T> {
 }
 
 export function DaftarBarangPanel({ onChanged }: { onChanged?: () => void }) {
+  const { alert, confirm } = useDialog();
   const [items, setItems] = useState<BackendConsumable[]>([]);
   const [itemsLoading, setItemsLoading] = useState(true);
   const [itemsError, setItemsError] = useState<string | null>(null);
@@ -141,7 +143,7 @@ export function DaftarBarangPanel({ onChanged }: { onChanged?: () => void }) {
       await fetchItems();
       onChanged?.();
     } catch (err) {
-      alert(`Gagal: ${err instanceof Error ? err.message : String(err)}`);
+      await alert(`Gagal: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
@@ -167,12 +169,12 @@ export function DaftarBarangPanel({ onChanged }: { onChanged?: () => void }) {
       await fetchItems();
       onChanged?.();
     } catch (err) {
-      alert(`Gagal: ${err instanceof Error ? err.message : String(err)}`);
+      await alert(`Gagal: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
   const handleDelete = async (c: BackendConsumable) => {
-    if (!confirm(`Hapus "${c.name}"?`)) return;
+    if (!(await confirm(`Hapus "${c.name}"?`, { destructive: true, confirmText: "Hapus" }))) return;
     try {
       const res = await apiFetch(
         `${API_BASE}/api/consumables/${encodeURIComponent(c.id)}`,
@@ -182,7 +184,7 @@ export function DaftarBarangPanel({ onChanged }: { onChanged?: () => void }) {
       await fetchItems();
       onChanged?.();
     } catch (err) {
-      alert(`Gagal: ${err instanceof Error ? err.message : String(err)}`);
+      await alert(`Gagal: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
@@ -217,7 +219,7 @@ export function DaftarBarangPanel({ onChanged }: { onChanged?: () => void }) {
       await fetchItems();
       onChanged?.();
     } catch (err) {
-      alert(`Gagal: ${err instanceof Error ? err.message : String(err)}`);
+      await alert(`Gagal: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 

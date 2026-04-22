@@ -3,6 +3,7 @@ import { PageLayout } from "../components/PageLayout";
 import { Shield, X, Loader2, AlertTriangle, Construction } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiFetch } from "../lib/apiFetch";
+import { useDialog } from "../lib/dialog";
 
 type View = "peminjaman-laptop" | "peminjaman-ruangan" | "bebas-lab";
 
@@ -85,6 +86,7 @@ interface BebasLabRecord {
 
 export default function PersetujuanKepalaLab() {
   const { user } = useAuth();
+  const { alert, confirm } = useDialog();
   const isSuperAdmin = user?.roles?.includes("SUPER_ADMIN") ?? false;
   const [currentView, setCurrentView] = useState<View | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -227,10 +229,11 @@ export default function PersetujuanKepalaLab() {
   }, []);
 
   const handleReservationAction = async (id: string, setuju: boolean) => {
-    if (
-      !confirm(setuju ? "Setujui reservasi ini?" : "Tolak reservasi ini?")
-    )
-      return;
+    const ok = await confirm(
+      setuju ? "Setujui reservasi ini?" : "Tolak reservasi ini?",
+      setuju ? {} : { destructive: true, confirmText: "Tolak" },
+    );
+    if (!ok) return;
     const status = setuju ? "APPROVED" : "REJECTED";
     try {
       const res = await apiFetch(
@@ -245,7 +248,7 @@ export default function PersetujuanKepalaLab() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       void fetchReservations();
     } catch (err) {
-      alert(`Gagal: ${err instanceof Error ? err.message : String(err)}`);
+      await alert(`Gagal: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
@@ -398,7 +401,7 @@ export default function PersetujuanKepalaLab() {
       : `/api/clearances/${encodeURIComponent(selectedRecord.id)}/status`;
     const setuju = tindakanForm.tindakan === "Setujui";
     if (!isLoan && !setuju && !tindakanForm.keterangan.trim()) {
-      alert("Alasan penolakan wajib diisi");
+      await alert("Alasan penolakan wajib diisi");
       return;
     }
     const body = isLoan
@@ -420,7 +423,7 @@ export default function PersetujuanKepalaLab() {
         const err = (await res.json().catch(() => null)) as { message?: string } | null;
         throw new Error(err?.message ?? `HTTP ${res.status}`);
       }
-      alert(
+      await alert(
         `Permohonan dari ${selectedRecord.namaMahasiswa} telah ${
           setuju ? "disetujui" : "ditolak"
         }`,
@@ -430,7 +433,7 @@ export default function PersetujuanKepalaLab() {
       if (isLoan) refetchLoans();
       else refetchClearances();
     } catch (err) {
-      alert(
+      await alert(
         `Gagal memproses: ${err instanceof Error ? err.message : String(err)}`,
       );
     } finally {

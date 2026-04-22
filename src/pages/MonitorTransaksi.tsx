@@ -4,6 +4,7 @@ import { ShieldCheck, Loader2, AlertTriangle, Ban } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Navigate } from "react-router";
 import { apiFetch } from "../lib/apiFetch";
+import { useDialog } from "../lib/dialog";
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
 
@@ -83,6 +84,7 @@ function formatDate(iso: string): string {
 
 export default function MonitorTransaksi() {
   const { user, loading: authLoading } = useAuth();
+  const { alert, confirm } = useDialog();
   const [loans, setLoans] = useState<BackendLoan[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -128,12 +130,11 @@ export default function MonitorTransaksi() {
   const handleCancel = async (loan: BackendLoan) => {
     const borrower = loan.borrower?.displayName ?? "peminjam";
     const item = loan.asset ? `${loan.asset.code} — ${loan.asset.name}` : "aset";
-    if (
-      !confirm(
-        `Batalkan peminjaman ini?\n\nPeminjam: ${borrower}\nAset: ${item}\nStatus: ${STATUS_LABEL[loan.status]}\n\nAset akan kembali tersedia untuk peminjam lain.`,
-      )
-    )
-      return;
+    const ok = await confirm(
+      `Batalkan peminjaman ini?\n\nPeminjam: ${borrower}\nAset: ${item}\nStatus: ${STATUS_LABEL[loan.status]}\n\nAset akan kembali tersedia untuk peminjam lain.`,
+      { title: "Batalkan Peminjaman", destructive: true, confirmText: "Batalkan" },
+    );
+    if (!ok) return;
 
     setCancellingId(loan.id);
     try {
@@ -154,7 +155,7 @@ export default function MonitorTransaksi() {
       }
       setRefreshKey((k) => k + 1);
     } catch (err) {
-      alert(
+      await alert(
         `Gagal membatalkan: ${
           err instanceof Error ? err.message : String(err)
         }`,

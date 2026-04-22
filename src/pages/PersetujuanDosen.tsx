@@ -3,6 +3,7 @@ import { PageLayout } from "../components/PageLayout";
 import { UserCheck, X, Loader2, AlertTriangle } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiFetch } from "../lib/apiFetch";
+import { useDialog } from "../lib/dialog";
 
 type View = "permohonan-persetujuan" | "riwayat-persetujuan";
 
@@ -86,6 +87,7 @@ function statusToTindakan(status: BackendLoanStatus): string {
 
 export default function PersetujuanDosen() {
   const { user } = useAuth();
+  const { alert } = useDialog();
   const lecturerId = user?.dbUser?.id ?? null;
   const isSuperAdmin = user?.roles?.includes("SUPER_ADMIN") ?? false;
   // Super Admin lihat semua bimbingan (oversight). Dosen biasa: hanya miliknya.
@@ -210,7 +212,7 @@ export default function PersetujuanDosen() {
         },
       );
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      alert(
+      await alert(
         `Permohonan ${selectedRecord.namaMahasiswa} telah ${
           tindakanForm.tindakan === "Setujui" ? "disetujui" : "ditolak"
         }`,
@@ -219,7 +221,7 @@ export default function PersetujuanDosen() {
       setTindakanForm({ tindakan: "", keterangan: "" });
       refetchLoans();
     } catch (err) {
-      alert(
+      await alert(
         `Gagal memproses tindakan: ${
           err instanceof Error ? err.message : String(err)
         }`,

@@ -17,6 +17,7 @@ import {
   DialogTitle,
 } from "./ui/dialog";
 import { apiFetch } from "../lib/apiFetch";
+import { useDialog } from "../lib/dialog";
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
 
@@ -51,6 +52,7 @@ const STATUS_BADGE: Record<FinePaidStatus, { label: string; cls: string }> = {
 };
 
 export function RiwayatDendaPanel() {
+  const { alert } = useDialog();
   const [tab, setTab] = useState<FilterTab>("UNPAID");
   const [search, setSearch] = useState("");
   const [items, setItems] = useState<FineLoan[]>([]);
@@ -124,7 +126,7 @@ export function RiwayatDendaPanel() {
       closeAction();
       void fetchFines();
     } catch (err) {
-      alert(
+      await alert(
         `Gagal memperbarui status denda: ${
           err instanceof Error ? err.message : String(err)
         }`,

@@ -3,6 +3,7 @@ import { PageLayout } from "../components/PageLayout";
 import { Receipt, Search, ScanLine, Plus, X, CheckCircle, Eye, ShoppingBag, Minus, Loader2 } from "lucide-react";
 import { apiFetch } from "../lib/apiFetch";
 import { formatDateTime } from "../lib/format";
+import { useDialog } from "../lib/dialog";
 import { DaftarBarangPanel } from "../components/DaftarBarangPanel";
 import { TerimaBarangPanel } from "../components/TerimaBarangPanel";
 
@@ -67,6 +68,7 @@ interface Transaction {
 }
 
 export default function TransaksiHabisPakai() {
+  const { alert } = useDialog();
   const [activeMenu, setActiveMenu] = useState<string>("");
 
   // Fetch barang dari /api/consumables.
@@ -237,11 +239,11 @@ export default function TransaksiHabisPakai() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeMenu, typeFilter]);
 
-  const handleAddToCart = (item: Item) => {
+  const handleAddToCart = async (item: Item) => {
     const quantity = itemQuantities[item.id] || 1;
-    
+
     if (quantity > item.stok) {
-      alert("Jumlah melebihi stok yang tersedia");
+      await alert("Jumlah melebihi stok yang tersedia");
       return;
     }
     
@@ -379,7 +381,7 @@ export default function TransaksiHabisPakai() {
       });
       setQuickAddOpen(false);
     } catch (err) {
-      alert(
+      await alert(
         `Gagal menambah barang: ${err instanceof Error ? err.message : String(err)}`,
       );
     } finally {
@@ -389,7 +391,7 @@ export default function TransaksiHabisPakai() {
 
   const handleProcessTransaction = async () => {
     if (!userId || !userName || cart.length === 0) {
-      alert("Mohon lengkapi ID pengguna dan pilih barang");
+      await alert("Mohon lengkapi ID pengguna dan pilih barang");
       return;
     }
 
@@ -416,7 +418,7 @@ export default function TransaksiHabisPakai() {
         throw new Error(errBody?.message ?? `HTTP ${res.status}`);
       }
     } catch (err) {
-      alert(
+      await alert(
         `Gagal mencatat transaksi: ${err instanceof Error ? err.message : String(err)}`,
       );
       return;
