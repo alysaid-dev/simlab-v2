@@ -92,16 +92,19 @@ export const clearancesService = {
     const signedAt = new Date();
     const hash = generateHash(id, signerUid, signedAt);
 
-    // Hitung nomor surat — urut per tahun, count approved + 1.
-    const yearStart = new Date(signedAt.getFullYear(), 0, 1);
-    const yearEnd = new Date(signedAt.getFullYear() + 1, 0, 1);
-    const countThisYear = await prisma.clearanceLetter.count({
-      where: {
-        status: ClearanceStatus.APPROVED,
-        signedAtKepalaLab: { gte: yearStart, lt: yearEnd },
-      },
+    // Nomor surat: MAX(urut existing tahun ini) + 1. Pakai max, bukan count,
+    // supaya tahan gap (nomor legacy yang missing) + letter lama tanpa nomor.
+    // Filter via substring bulan Romawi tahun — pattern "NNN/Lab.Stat/FMIPA-UII/MM/YYYY".
+    const year = signedAt.getFullYear();
+    const existing = await prisma.clearanceLetter.findMany({
+      where: { nomorSurat: { endsWith: `/${year}` } },
+      select: { nomorSurat: true },
     });
-    const nomor = fmtNomorSurat(countThisYear + 1, signedAt);
+    const maxUrut = existing.reduce((max, row) => {
+      const urut = parseInt(row.nomorSurat?.split("/")[0] ?? "0", 10);
+      return Number.isFinite(urut) && urut > max ? urut : max;
+    }, 0);
+    const nomor = fmtNomorSurat(maxUrut + 1, signedAt);
 
     // Update dulu (supaya DB punya semua field yang diperlukan render).
     const letter = await prisma.clearanceLetter.update({
