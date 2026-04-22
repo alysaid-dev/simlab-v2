@@ -10,15 +10,16 @@ router.use(requireAuth);
 router.get("/", usersController.list);
 // Specific path before `/:id` — otherwise "me" would be matched as an id.
 router.get("/me/obligations", usersController.obligations);
+router.patch("/me", usersController.updateMe);
 router.get("/:id", usersController.getById);
 
-// Mutasi user + roles — hanya ADMIN+.
-router.post("/", requireRoleAtLeast("ADMIN"), usersController.create);
-router.patch("/:id", requireRoleAtLeast("ADMIN"), usersController.update);
-router.delete("/:id", requireRoleAtLeast("ADMIN"), usersController.remove);
+// Mutasi user + roles — LABORAN+ (Laboran mengelola akun).
+router.post("/", requireRoleAtLeast("LABORAN"), usersController.create);
+router.patch("/:id", requireRoleAtLeast("LABORAN"), usersController.update);
+router.delete("/:id", requireRoleAtLeast("LABORAN"), usersController.remove);
 router.put(
   "/:id/roles",
-  requireRoleAtLeast("ADMIN"),
+  requireRoleAtLeast("LABORAN"),
   usersController.replaceRoles,
 );
 

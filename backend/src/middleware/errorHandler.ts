@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import { ZodError } from "zod";
 import { Prisma } from "@prisma/client";
+import { MulterError } from "multer";
 import { isDev } from "../config/env.js";
 
 /**
@@ -73,6 +74,19 @@ export function errorHandler(
       error: "DatabaseError",
       code: err.code,
       message: err.message,
+    });
+    return;
+  }
+
+  if (err instanceof MulterError) {
+    const message =
+      err.code === "LIMIT_FILE_SIZE"
+        ? "Ukuran file melebihi batas yang diizinkan (maks 200KB)"
+        : err.message;
+    res.status(400).json({
+      error: "UploadError",
+      code: err.code,
+      message,
     });
     return;
   }

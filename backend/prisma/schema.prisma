@@ -105,6 +105,12 @@ enum DocumentType {
   OTHER
 }
 
+enum FinePaidStatus {
+  UNPAID
+  PAID
+  WAIVED
+}
+
 // ============================================================================
 // USERS & ROLES
 // ============================================================================
@@ -121,20 +127,23 @@ model User {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   // Relations
-  roles                  UserRole[]
-  kepalaOfLabs           Laboratory[]            @relation("LaboratoryKepalaLab")
-  laboranOfLabs          LaboratoryLaboran[]
-  loansAsBorrower        Loan[]                  @relation("LoanBorrower")
-  loansAsLecturer        Loan[]                  @relation("LoanLecturer")
-  equipmentLoans         EquipmentLoan[]
-  consumableTransactions ConsumableTransaction[]
-  clearanceLetters       ClearanceLetter[]       @relation("ClearanceOwner")
-  clearanceApprovals     ClearanceLetter[]       @relation("ClearanceApprover")
-  roomReservations       RoomReservation[]       @relation("ReservationUser")
-  roomReservationChecks  RoomReservation[]       @relation("ReservationChecker")
-  roomReservationApprovals RoomReservation[]     @relation("ReservationApprover")
-  digitalSignatures      DigitalSignature[]
-  activityLogs           ActivityLog[]
+  roles                    UserRole[]
+  kepalaOfLabs             Laboratory[]            @relation("LaboratoryKepalaLab")
+  laboranOfLabs            LaboratoryLaboran[]
+  loansAsBorrower          Loan[]                  @relation("LoanBorrower")
+  loansAsLecturer          Loan[]                  @relation("LoanLecturer")
+  loansAsKalabApprover     Loan[]                  @relation("LoanKalabApprover")
+  loansAsLaboranHandover   Loan[]                  @relation("LoanLaboranHandover")
+  loansAsLaboranReturn     Loan[]                  @relation("LoanLaboranReturn")
+  equipmentLoans           EquipmentLoan[]
+  consumableTransactions   ConsumableTransaction[]
+  clearanceLetters         ClearanceLetter[]       @relation("ClearanceOwner")
+  clearanceApprovals       ClearanceLetter[]       @relation("ClearanceApprover")
+  roomReservations         RoomReservation[]       @relation("ReservationUser")
+  roomReservationChecks    RoomReservation[]       @relation("ReservationChecker")
+  roomReservationApprovals RoomReservation[]       @relation("ReservationApprover")
+  digitalSignatures        DigitalSignature[]
+  activityLogs             ActivityLog[]
 
   @@index([email])
   @@index([uid])
@@ -174,16 +183,20 @@ model UserRole {
 
 model Laboratory {
   id          String   @id @default(uuid()) @db.Uuid
-  name        String
+  name        String   @unique
+  code        String?  @unique
   description String?
+  isActive    Boolean  @default(true) @map("is_active")
   kepalaLabId String?  @map("kepala_lab_id") @db.Uuid
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  kepalaLab User?               @relation("LaboratoryKepalaLab", fields: [kepalaLabId], references: [id], onDelete: SetNull)
-  laborans  LaboratoryLaboran[]
-  assets    Asset[]
-  equipment Equipment[]
+  kepalaLab    User?               @relation("LaboratoryKepalaLab", fields: [kepalaLabId], references: [id], onDelete: SetNull)
+  laborans     LaboratoryLaboran[]
+  assets       Asset[]
+  equipment    Equipment[]
+  rooms        Room[]
+  reservations RoomReservation[]
 
   @@index([kepalaLabId])
   @@map("laboratories")
@@ -252,44 +265,51 @@ model Equipment {
 // ============================================================================
 
 model Room {
-  id        String   @id @default(uuid()) @db.Uuid
-  name      String
-  code      String   @unique
-  capacity  Int      @default(0)
-  location  String?
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String
+  code         String   @unique
+  capacity     Int      @default(0)
+  location     String?
+  isActive     Boolean  @default(true) @map("is_active")
+  laboratoryId String?  @map("laboratory_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
+  laboratory   Laboratory?       @relation(fields: [laboratoryId], references: [id], onDelete: SetNull)
   reservations RoomReservation[]
 
+  @@index([laboratoryId])
   @@map("rooms")
 }
 
 model RoomReservation {
-  id                   String            @id @default(uuid()) @db.Uuid
-  userId               String            @map("user_id") @db.Uuid
-  roomId               String            @map("room_id") @db.Uuid
-  purpose              String
-  startTime            DateTime          @map("start_time")
-  endTime              DateTime          @map("end_time")
-  status               ReservationStatus @default(PENDING)
-  notes                String?           @db.Text
-  suratPermohonanPath  String?           @map("surat_permohonan_path")
-  checkedBy            String?           @map("checked_by") @db.Uuid
-  checkedAt            DateTime?         @map("checked_at")
-  approvedBy           String?           @map("approved_by") @db.Uuid
-  approvedAt           DateTime?         @map("approved_at")
-  createdAt            DateTime          @default(now()) @map("created_at")
-  updatedAt            DateTime          @updatedAt @map("updated_at")
+  id                  String            @id @default(uuid()) @db.Uuid
+  userId              String            @map("user_id") @db.Uuid
+  roomId              String            @map("room_id") @db.Uuid
+  laboratoryId        String?           @map("laboratory_id") @db.Uuid
+  purpose             String
+  startTime           DateTime          @map("start_time")
+  endTime             DateTime          @map("end_time")
+  status              ReservationStatus @default(PENDING)
+  notes               String?           @db.Text
+  suratPermohonanPath String?           @map("surat_permohonan_path")
+  checkedBy           String?           @map("checked_by") @db.Uuid
+  checkedAt           DateTime?         @map("checked_at")
+  approvedBy          String?           @map("approved_by") @db.Uuid
+  approvedAt          DateTime?         @map("approved_at")
+  rejectionReason     String?           @map("rejection_reason") @db.Text
+  createdAt           DateTime          @default(now()) @map("created_at")
+  updatedAt           DateTime          @updatedAt @map("updated_at")
 
-  user     User  @relation("ReservationUser", fields: [userId], references: [id], onDelete: Restrict)
-  room     Room  @relation(fields: [roomId], references: [id], onDelete: Restrict)
-  checker  User? @relation("ReservationChecker", fields: [checkedBy], references: [id], onDelete: SetNull)
-  approver User? @relation("ReservationApprover", fields: [approvedBy], references: [id], onDelete: SetNull)
+  user       User        @relation("ReservationUser", fields: [userId], references: [id], onDelete: Restrict)
+  room       Room        @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  laboratory Laboratory? @relation(fields: [laboratoryId], references: [id], onDelete: SetNull)
+  checker    User?       @relation("ReservationChecker", fields: [checkedBy], references: [id], onDelete: SetNull)
+  approver   User?       @relation("ReservationApprover", fields: [approvedBy], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([roomId])
+  @@index([laboratoryId])
   @@index([status])
   @@index([startTime])
   @@map("room_reservations")
@@ -300,26 +320,48 @@ model RoomReservation {
 // ============================================================================
 
 model Loan {
-  id             String     @id @default(uuid()) @db.Uuid
-  userId         String     @map("user_id") @db.Uuid
-  assetId        String     @map("asset_id") @db.Uuid
-  lecturerId     String?    @map("lecturer_id") @db.Uuid
+  id             String         @id @default(uuid()) @db.Uuid
+  userId         String         @map("user_id") @db.Uuid
+  assetId        String         @map("asset_id") @db.Uuid
+  lecturerId     String?        @map("lecturer_id") @db.Uuid
   type           LoanType
-  status         LoanStatus @default(PENDING)
-  startDate      DateTime   @map("start_date")
-  endDate        DateTime   @map("end_date")
-  returnDate     DateTime?  @map("return_date")
-  dayLate        Int        @default(0) @map("day_late")
-  fine           Decimal    @default(0) @db.Decimal(12, 2)
-  thesisTitle    String?    @map("thesis_title")
-  thesisAbstract String?    @map("thesis_abstract") @db.Text
-  notes          String?    @db.Text
-  createdAt      DateTime   @default(now()) @map("created_at")
-  updatedAt      DateTime   @updatedAt @map("updated_at")
+  status         LoanStatus     @default(PENDING)
+  startDate      DateTime       @map("start_date")
+  endDate        DateTime       @map("end_date")
+  returnDate     DateTime?      @map("return_date")
+  dayLate        Int            @default(0) @map("day_late")
+  fine           Decimal        @default(0) @db.Decimal(12, 2)
+  finePaid       FinePaidStatus @default(UNPAID) @map("fine_paid")
+  finePaidAt     DateTime?      @map("fine_paid_at")
+  finePaidBy     String?        @map("fine_paid_by") @db.Uuid
+  fineNote       String?        @map("fine_note") @db.Text
+  thesisTitle    String?        @map("thesis_title")
+  thesisAbstract String?        @map("thesis_abstract") @db.Text
+  notes          String?        @db.Text
 
-  borrower User  @relation("LoanBorrower", fields: [userId], references: [id], onDelete: Restrict)
-  asset    Asset @relation(fields: [assetId], references: [id], onDelete: Restrict)
-  lecturer User? @relation("LoanLecturer", fields: [lecturerId], references: [id], onDelete: SetNull)
+  // Per-stage approval chain — dipopulasi di updateStatus. NULL untuk loan
+  // historis sebelum kolom ini ditambahkan.
+  dosenDecision     String?         @map("dosen_decision") // APPROVED | REJECTED
+  dosenDecisionAt   DateTime?       @map("dosen_decision_at")
+  kalabDecisionBy   String?         @map("kalab_decision_by") @db.Uuid
+  kalabDecision     String?         @map("kalab_decision") // APPROVED | REJECTED
+  kalabDecisionAt   DateTime?       @map("kalab_decision_at")
+  laboranHandoverBy String?         @map("laboran_handover_by") @db.Uuid
+  laboranHandoverAt DateTime?       @map("laboran_handover_at")
+  laboranReturnBy   String?         @map("laboran_return_by") @db.Uuid
+  rejectionReason   String?         @map("rejection_reason") @db.Text
+  returnCondition   AssetCondition? @map("return_condition")
+  returnNote        String?         @map("return_note") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  borrower        User  @relation("LoanBorrower", fields: [userId], references: [id], onDelete: Restrict)
+  asset           Asset @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  lecturer        User? @relation("LoanLecturer", fields: [lecturerId], references: [id], onDelete: SetNull)
+  kalabApprover   User? @relation("LoanKalabApprover", fields: [kalabDecisionBy], references: [id], onDelete: SetNull)
+  laboranHandover User? @relation("LoanLaboranHandover", fields: [laboranHandoverBy], references: [id], onDelete: SetNull)
+  laboranReturn   User? @relation("LoanLaboranReturn", fields: [laboranReturnBy], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([assetId])
@@ -371,6 +413,7 @@ model EquipmentLoanItem {
 
 model Consumable {
   id           String   @id @default(uuid()) @db.Uuid
+  code         String?  @unique
   name         String
   unit         String
   stock        Int      @default(0)
@@ -406,26 +449,26 @@ model ConsumableTransaction {
 // ============================================================================
 
 model ClearanceLetter {
-  id           String          @id @default(uuid()) @db.Uuid
-  userId       String          @map("user_id") @db.Uuid
-  status       ClearanceStatus @default(DRAFT)
-  approvedBy   String?         @map("approved_by") @db.Uuid
-  approvedAt   DateTime?       @map("approved_at")
-  documentPath String?         @map("document_path")
-  qrHash       String?         @unique @map("qr_hash")
-  notes        String?         @db.Text
-  tanggalSidang      DateTime? @map("tanggal_sidang")
-  rejectionReason    String?   @map("rejection_reason") @db.Text
-  nomorSurat         String?   @unique @map("nomor_surat")
-  signerUidLaboran   String?   @map("signer_uid_laboran")
-  signerUidKepalaLab String?   @map("signer_uid_kepala_lab")
-  hashLaboran        String?   @unique @map("hash_laboran")
-  hashKepalaLab      String?   @unique @map("hash_kepala_lab")
-  signedAtLaboran    DateTime? @map("signed_at_laboran")
-  signedAtKepalaLab  DateTime? @map("signed_at_kepala_lab")
-  pdfUrl             String?   @map("pdf_url")
-  createdAt    DateTime        @default(now()) @map("created_at")
-  updatedAt    DateTime        @updatedAt @map("updated_at")
+  id                 String          @id @default(uuid()) @db.Uuid
+  userId             String          @map("user_id") @db.Uuid
+  status             ClearanceStatus @default(DRAFT)
+  approvedBy         String?         @map("approved_by") @db.Uuid
+  approvedAt         DateTime?       @map("approved_at")
+  documentPath       String?         @map("document_path")
+  qrHash             String?         @unique @map("qr_hash")
+  notes              String?         @db.Text
+  tanggalSidang      DateTime?       @map("tanggal_sidang")
+  rejectionReason    String?         @map("rejection_reason") @db.Text
+  nomorSurat         String?         @unique @map("nomor_surat")
+  signerUidLaboran   String?         @map("signer_uid_laboran")
+  signerUidKepalaLab String?         @map("signer_uid_kepala_lab")
+  hashLaboran        String?         @unique @map("hash_laboran")
+  hashKepalaLab      String?         @unique @map("hash_kepala_lab")
+  signedAtLaboran    DateTime?       @map("signed_at_laboran")
+  signedAtKepalaLab  DateTime?       @map("signed_at_kepala_lab")
+  pdfUrl             String?         @map("pdf_url")
+  createdAt          DateTime        @default(now()) @map("created_at")
+  updatedAt          DateTime        @updatedAt @map("updated_at")
 
   user     User  @relation("ClearanceOwner", fields: [userId], references: [id], onDelete: Restrict)
   approver User? @relation("ClearanceApprover", fields: [approvedBy], references: [id], onDelete: SetNull)
@@ -475,4 +518,18 @@ model ActivityLog {
   @@index([entity, entityId])
   @@index([createdAt])
   @@map("activity_logs")
+}
+
+// ============================================================================
+// APP SETTINGS (singleton row, id = "singleton")
+// ============================================================================
+
+model AppSettings {
+  id                   String   @id
+  lateFeePerDayIdr     Int      @default(25000) @map("late_fee_per_day_idr")
+  lateFeeToleranceDays Int      @default(0) @map("late_fee_tolerance_days")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  @@map("app_settings")
 }

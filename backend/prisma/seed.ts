@@ -174,40 +174,59 @@ async function seedDigitalSignatures() {
   );
 }
 
-const rooms: Array<{ code: string; name: string; capacity: number; location?: string }> = [
-  {
-    code: "LAB-MRK",
-    name: "Laboratorium Manajemen Resiko dan Kebencanaan",
-    capacity: 30,
-    location: "Gedung FMIPA Lantai 2",
-  },
-  {
-    code: "LAB-BIS",
-    name: "Laboratorium Bisnis Industri dan Sosial",
-    capacity: 30,
-    location: "Gedung FMIPA Lantai 2",
-  },
-  {
-    code: "LAB-SD",
-    name: "Laboratorium Sains Data",
-    capacity: 30,
-    location: "Gedung FMIPA Lantai 3",
-  },
-];
+// Per lab code (dari LABORATORIES), map ke default kapasitas + lokasi dan
+// kode ruangan lama (sebelum sync) — dipakai buat migrasi row yang sudah ada
+// di DB production. Setelah sync: Room.code = Laboratory.code dan nama
+// ruangan persis mengikuti nama laboratorium.
+const ROOM_DEFAULTS: Record<
+  string,
+  { oldCodes: string[]; capacity: number; location: string }
+> = {
+  SBIS: { oldCodes: ["LAB-BIS"], capacity: 30, location: "Gedung FMIPA Lantai 2" },
+  SMRK: { oldCodes: ["LAB-MRK"], capacity: 30, location: "Gedung FMIPA Lantai 2" },
+  SSD: { oldCodes: ["LAB-SD"], capacity: 30, location: "Gedung FMIPA Lantai 3" },
+};
 
 async function seedRooms() {
-  for (const r of rooms) {
-    await prisma.room.upsert({
-      where: { code: r.code },
-      create: {
-        code: r.code,
-        name: r.name,
-        capacity: r.capacity,
-        location: r.location,
-        isActive: true,
-      },
-      update: { name: r.name, capacity: r.capacity, location: r.location },
+  for (const lab of LABORATORIES) {
+    const dbLab = await prisma.laboratory.findUnique({
+      where: { name: lab.name },
     });
+    if (!dbLab) {
+      console.warn(`[seed] laboratory ${lab.code} tidak ditemukan — skip room`);
+      continue;
+    }
+    const meta = ROOM_DEFAULTS[lab.code];
+    if (!meta) continue;
+    // Cari room eksisting lewat kode lama ATAU kode baru (= lab.code) agar
+    // idempotent: jalankan seed berulang kali tetap satu row per lab.
+    const existing = await prisma.room.findFirst({
+      where: { code: { in: [...meta.oldCodes, lab.code] } },
+    });
+    if (existing) {
+      await prisma.room.update({
+        where: { id: existing.id },
+        data: {
+          code: lab.code,
+          name: lab.name,
+          capacity: meta.capacity,
+          location: meta.location,
+          laboratoryId: dbLab.id,
+          isActive: true,
+        },
+      });
+    } else {
+      await prisma.room.create({
+        data: {
+          code: lab.code,
+          name: lab.name,
+          capacity: meta.capacity,
+          location: meta.location,
+          laboratoryId: dbLab.id,
+          isActive: true,
+        },
+      });
+    }
   }
   const count = await prisma.room.count();
   console.log(`[seed] rooms total: ${count}`);
@@ -304,9 +323,46 @@ async function seedStaff() {
   console.log(`[seed] staff upsert selesai — total users di DB: ${total}`);
 }
 
+// ---------------------------------------------------------------------------
+// 3 Laboratorium yang dikelola Lab Statistika FMIPA UII.
+// kepalaLab & laboran belum di-assign di seed — diset via modul Pengaturan
+// Aplikasi (tidak overwrite kalau sudah diset supaya tidak menimpa assignment
+// manual dari UI).
+// ---------------------------------------------------------------------------
+
+const LABORATORIES: Array<{ code: string; name: string }> = [
+  { code: "SBIS", name: "Laboratorium Statistika Bisnis, Industri dan Sosial" },
+  { code: "SMRK", name: "Laboratorium Statistika Manajemen Risiko dan Kebencanaan" },
+  { code: "SSD", name: "Laboratorium Statistika Sains Data" },
+];
+
+async function seedLaboratories() {
+  for (const lab of LABORATORIES) {
+    await prisma.laboratory.upsert({
+      where: { name: lab.name },
+      create: { name: lab.name, code: lab.code, isActive: true },
+      update: { code: lab.code, isActive: true },
+    });
+  }
+  const total = await prisma.laboratory.count();
+  console.log(`[seed] laboratories total: ${total}`);
+}
+
+async function seedAppSettings() {
+  await prisma.appSettings.upsert({
+    where: { id: "singleton" },
+    create: { id: "singleton" },
+    update: {},
+  });
+  console.log(`[seed] app_settings singleton ready`);
+}
+
 async function main() {
   await seedAssets();
+  // Laboratories harus ada dulu supaya seedRooms bisa set laboratoryId.
+  await seedLaboratories();
   await seedRooms();
+  await seedAppSettings();
   await seedStaff();
   await seedDigitalSignatures();
 }

@@ -11,7 +11,7 @@ router.get("/:id", equipmentLoansController.getById);
 router.post("/", equipmentLoansController.create);
 router.patch(
   "/:id/status",
-  requireRole("LABORAN", "KEPALA_LAB", "ADMIN", "SUPER_ADMIN"),
+  requireRole("LABORAN", "KEPALA_LAB", "SUPER_ADMIN"),
   equipmentLoansController.updateStatus
 );
 

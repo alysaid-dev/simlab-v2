@@ -6,6 +6,12 @@ import loansRoutes from "./loans.routes.js";
 import equipmentRoutes from "./equipment.routes.js";
 import equipmentLoansRoutes from "./equipmentLoans.routes.js";
 import clearancesRoutes from "./clearances.routes.js";
+import consumablesRoutes from "./consumables.routes.js";
+import roomsRoutes from "./rooms.routes.js";
+import reservationsRoutes from "./reservations.routes.js";
+import historyRoutes from "./history.routes.js";
+import appSettingsRoutes from "./appSettings.routes.js";
+import laboratoriesRoutes from "./laboratories.routes.js";
 import verifyRoutes from "./verify.routes.js";
 // ⚠️ TEST-ONLY — remove before production.
 import testRoutes from "./test.routes.js";
@@ -23,6 +29,12 @@ router.use("/loans", loansRoutes);
 router.use("/equipment", equipmentRoutes);
 router.use("/equipment-loans", equipmentLoansRoutes);
 router.use("/clearances", clearancesRoutes);
+router.use("/consumables", consumablesRoutes);
+router.use("/rooms", roomsRoutes);
+router.use("/reservations", reservationsRoutes);
+router.use("/history", historyRoutes);
+router.use("/app-settings", appSettingsRoutes);
+router.use("/laboratories", laboratoriesRoutes);
 // PUBLIC endpoint — QR verification. Must stay OUTSIDE any auth guard.
 router.use("/verify", verifyRoutes);
 // ⚠️ TEST-ONLY — remove before production.

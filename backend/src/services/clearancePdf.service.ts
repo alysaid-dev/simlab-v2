@@ -129,20 +129,34 @@ export async function renderClearancePdf(
       );
 
     doc.moveDown(1);
-    const labelX = 100;
-    const valueX = 220;
-    const labelFn = (label: string, value: string) => {
-      doc.text(label, labelX, doc.y, { continued: true });
-      doc.text(": ", { continued: true });
-      doc.text(value);
-    };
-    doc.font("Helvetica");
-    labelFn("Nama", input.namaMahasiswa);
-    labelFn("NIM", input.nim);
-    labelFn(
-      "Tanggal Sidang",
-      input.tanggalSidang ? fmtTanggalID(input.tanggalSidang) : "-",
-    );
+
+    // Tabel identitas mahasiswa — 3 baris (Nama, NIM, Tanggal Sidang) dengan
+    // border. Label lebih sempit dari value supaya nama panjang tetap muat.
+    const tableX = 100;
+    const tableWidth = 400;
+    const labelColW = 130;
+    const valueColW = tableWidth - labelColW;
+    const rowH = 22;
+    const tableY = doc.y;
+    const rows: Array<[string, string]> = [
+      ["Nama", input.namaMahasiswa],
+      ["NIM", input.nim],
+      [
+        "Tanggal Sidang",
+        input.tanggalSidang ? fmtTanggalID(input.tanggalSidang) : "-",
+      ],
+    ];
+    doc.font("Helvetica").fontSize(11);
+    rows.forEach(([label, value], i) => {
+      const y = tableY + i * rowH;
+      doc.rect(tableX, y, labelColW, rowH).stroke();
+      doc.rect(tableX + labelColW, y, valueColW, rowH).stroke();
+      doc.text(label, tableX + 8, y + 6, { width: labelColW - 16 });
+      doc.text(value, tableX + labelColW + 8, y + 6, {
+        width: valueColW - 16,
+      });
+    });
+    doc.y = tableY + rows.length * rowH;
 
     doc.moveDown(1);
     doc
@@ -160,22 +174,28 @@ export async function renderClearancePdf(
       { align: "justify" },
     );
 
-    doc.moveDown(1.2);
-    doc.text(`Yogyakarta, ${fmtTanggalID(input.tanggalTerbit)}`, {
-      align: "right",
-    });
-
-    // Dua kolom tanda tangan: Kepala Lab (kiri) + Laboran (kanan)
-    const sigTop = doc.y + 15;
+    // Dua kolom tanda tangan: Kepala Lab (kiri) + Laboran (kanan).
+    // Tanggal terbit diletakkan di kolom Laboran (di atas label "Laboran,"),
+    // rata kiri di dalam kolomnya.
+    doc.moveDown(1.5);
+    const sigTop = doc.y;
     const colLeftX = 80;
     const colRightX = 330;
     const colWidth = 200;
 
     doc.font("Helvetica").fontSize(11);
     doc.text("Mengetahui,", colLeftX, sigTop, { width: colWidth });
-    doc.text("Kepala Laboratorium", colLeftX, sigTop + 14, { width: colWidth });
+    doc.text("Kepala Laboratorium", colLeftX, sigTop + 14, {
+      width: colWidth,
+    });
 
-    doc.text("Laboran,", colRightX, sigTop, { width: colWidth });
+    doc.text(
+      `Yogyakarta, ${fmtTanggalID(input.tanggalTerbit)}`,
+      colRightX,
+      sigTop,
+      { width: colWidth },
+    );
+    doc.text("Laboran,", colRightX, sigTop + 14, { width: colWidth });
 
     // QR codes
     const qrY = sigTop + 36;

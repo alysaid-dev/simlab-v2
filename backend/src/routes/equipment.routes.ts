@@ -10,6 +10,6 @@ router.get("/", equipmentController.list);
 router.get("/:id", equipmentController.getById);
 router.post("/", requireRoleAtLeast("LABORAN"), equipmentController.create);
 router.patch("/:id", requireRoleAtLeast("LABORAN"), equipmentController.update);
-router.delete("/:id", requireRoleAtLeast("ADMIN"), equipmentController.remove);
+router.delete("/:id", requireRoleAtLeast("SUPER_ADMIN"), equipmentController.remove);
 
 export default router;

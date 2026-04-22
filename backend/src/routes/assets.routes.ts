@@ -13,17 +13,17 @@ router.get("/:id", assetsController.getById);
 // Write — only LABORAN / KEPALA_LAB / ADMIN / SUPER_ADMIN
 router.post(
   "/",
-  requireRole("LABORAN", "KEPALA_LAB", "ADMIN", "SUPER_ADMIN"),
+  requireRole("LABORAN", "KEPALA_LAB", "SUPER_ADMIN"),
   assetsController.create
 );
 router.patch(
   "/:id",
-  requireRole("LABORAN", "KEPALA_LAB", "ADMIN", "SUPER_ADMIN"),
+  requireRole("LABORAN", "KEPALA_LAB", "SUPER_ADMIN"),
   assetsController.update
 );
 router.delete(
   "/:id",
-  requireRole("KEPALA_LAB", "ADMIN", "SUPER_ADMIN"),
+  requireRole("KEPALA_LAB", "SUPER_ADMIN"),
   assetsController.remove
 );
 

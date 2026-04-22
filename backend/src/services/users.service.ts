@@ -44,7 +44,7 @@ export const usersService = {
    * Called on login so the DB always has a record matching the SSO identity.
    */
   async upsertFromShibboleth(shib: ShibbolethUser) {
-    return prisma.user.upsert({
+    const user = await prisma.user.upsert({
       where: { uid: shib.uid },
       create: {
         uid: shib.uid,
@@ -57,6 +57,26 @@ export const usersService = {
         displayName: shib.displayName,
       },
     });
+
+    // Auto-assign role MAHASISWA kalau email pakai domain students.uii.ac.id,
+    // supaya user muncul dgn role di modul Akun tanpa perlu di-assign manual.
+    if (shib.email.toLowerCase().endsWith("@students.uii.ac.id")) {
+      const mhsRole = await prisma.role.findUnique({
+        where: { name: "MAHASISWA" },
+        select: { id: true },
+      });
+      if (mhsRole) {
+        await prisma.userRole.upsert({
+          where: {
+            userId_roleId: { userId: user.id, roleId: mhsRole.id },
+          },
+          update: {},
+          create: { userId: user.id, roleId: mhsRole.id },
+        });
+      }
+    }
+
+    return user;
   },
 
   async list(

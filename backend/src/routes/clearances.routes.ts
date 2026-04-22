@@ -12,7 +12,7 @@ router.get("/:id/download", clearancesController.download);
 router.post("/", clearancesController.create);
 router.patch(
   "/:id/status",
-  requireRole("LABORAN", "KEPALA_LAB", "ADMIN", "SUPER_ADMIN"),
+  requireRole("LABORAN", "KEPALA_LAB", "SUPER_ADMIN"),
   clearancesController.updateStatus
 );
 

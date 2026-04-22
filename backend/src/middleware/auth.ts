@@ -3,6 +3,7 @@ import http from "node:http";
 import { URL } from "node:url";
 import type { NextFunction, Request, Response } from "express";
 import { env } from "../config/env.js";
+import { prisma } from "../config/database.js";
 
 /**
  * User object populated from Shibboleth-injected request headers.
@@ -17,6 +18,12 @@ export interface ShibbolethUser {
   affiliation: string[];
   orgUnitDN: string | null;
   memberOf: string[];
+  /**
+   * Roles yang disimpan di DB (`user_roles` → `roles.name`). Di-populate
+   * sekali saat resolve Shibboleth session, lalu di-cache bareng user object
+   * di `sessionCache` — jadi guard tidak query DB tiap request.
+   */
+  dbRoles?: Role[];
 }
 
 // ---------------------------------------------------------------------------
@@ -26,23 +33,23 @@ export interface ShibbolethUser {
 /** Mirrors Prisma's RoleName enum. Source of truth for RBAC. */
 export type Role =
   | "SUPER_ADMIN"
-  | "ADMIN"
   | "KEPALA_LAB"
   | "DOSEN"
   | "LABORAN"
-  | "STAFF";
+  | "STAFF"
+  | "MAHASISWA";
 
 /**
  * Hierarchy ranks — higher = more authority. Used by `hasRoleAtLeast()`.
- * SUPER_ADMIN > ADMIN > KEPALA_LAB > DOSEN > LABORAN > STAFF.
+ * SUPER_ADMIN > KEPALA_LAB > DOSEN > LABORAN > STAFF > MAHASISWA.
  */
 const ROLE_RANK: Record<Role, number> = {
+  MAHASISWA: 0,
   STAFF: 1,
   LABORAN: 2,
   DOSEN: 3,
   KEPALA_LAB: 4,
-  ADMIN: 5,
-  SUPER_ADMIN: 6,
+  SUPER_ADMIN: 5,
 };
 
 /**
@@ -56,9 +63,6 @@ const ROLE_MAP: Record<string, Role> = {
   "super-admin": "SUPER_ADMIN",
   superadmin: "SUPER_ADMIN",
   "simlab-super-admin": "SUPER_ADMIN",
-  // ADMIN
-  admin: "ADMIN",
-  "simlab-admin": "ADMIN",
   // KEPALA_LAB
   "kepala-lab": "KEPALA_LAB",
   kalab: "KEPALA_LAB",
@@ -74,7 +78,14 @@ const ROLE_MAP: Record<string, Role> = {
   // STAFF
   staff: "STAFF",
   "simlab-staff": "STAFF",
+  // MAHASISWA
+  mahasiswa: "MAHASISWA",
+  student: "MAHASISWA",
+  "simlab-mahasiswa": "MAHASISWA",
 };
+
+/** UII student email domain — auto-map ke role MAHASISWA. */
+const STUDENT_EMAIL_DOMAIN = "@students.uii.ac.id";
 
 /** Extract the leading `cn=<value>` from an LDAP DN, else return input as-is. */
 function extractCN(value: string): string {
@@ -102,10 +113,39 @@ export function deriveRoles(user: ShibbolethUser): Set<Role> {
     const role = ROLE_MAP[a.toLowerCase().trim()];
     if (role) roles.add(role);
   }
+  // Roles yang di-assign Admin/Super Admin via UI (/api/users/:id/roles),
+  // tersimpan di tabel user_roles. Populated oleh shibbolethAttach.
+  if (user.dbRoles) {
+    for (const r of user.dbRoles) roles.add(r);
+  }
+  // Mahasiswa UII — auto-tag berdasarkan domain email, tanpa perlu assignment.
+  if (user.email.toLowerCase().endsWith(STUDENT_EMAIL_DOMAIN)) {
+    roles.add("MAHASISWA");
+  }
   if (env.shibboleth.superAdminUids.includes(user.uid)) {
     roles.add("SUPER_ADMIN");
   }
   return roles;
+}
+
+/**
+ * Query `user_roles` untuk UID tertentu. Dipanggil sekali saat shibboleth
+ * session di-resolve, hasilnya di-cache di `sessionCache` bareng user object.
+ * Return empty array kalau user belum ada di DB (akan di-upsert nanti oleh
+ * `/api/auth/me`) atau belum punya role assignment.
+ */
+async function fetchDbRoles(uid: string): Promise<Role[]> {
+  try {
+    const rec = await prisma.user.findUnique({
+      where: { uid },
+      select: { roles: { select: { role: { select: { name: true } } } } },
+    });
+    if (!rec) return [];
+    return rec.roles.map((ur) => ur.role.name as Role);
+  } catch (err) {
+    console.error("[fetchDbRoles] query failed for uid=", uid, err);
+    return [];
+  }
 }
 
 /**
@@ -288,6 +328,11 @@ async function resolveShibbolethUser(
 
   const user = parseSessionBody(body);
   if (!user) return null;
+
+  // Enrich dengan role dari DB sekali (bukan per-request) — sessionCache
+  // TTL biasanya 60s, jadi perubahan role lewat /api/users/:id/roles akan
+  // aktif paling lambat setelah TTL expire.
+  user.dbRoles = await fetchDbRoles(user.uid);
 
   sessionCache.set(cookie, {
     user,

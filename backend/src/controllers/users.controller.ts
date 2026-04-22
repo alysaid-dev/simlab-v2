@@ -27,6 +27,11 @@ const updateBody = z.object({
   isActive: z.boolean().optional(),
 });
 
+// Self-update — user biasa hanya boleh ubah waNumber-nya sendiri.
+const updateMeBody = z.object({
+  waNumber: z.string().trim().min(6),
+});
+
 const rolesBody = z.object({
   roles: z.array(z.nativeEnum(RoleName)),
 });
@@ -44,6 +49,15 @@ export const usersController = {
     }
     const result = await usersService.list(q);
     res.json(result);
+  }),
+
+  // PATCH /users/me — self-update. Saat ini hanya waNumber; dipakai saat
+  // first-login onboarding (user wajib isi WA sebelum memakai modul lain).
+  updateMe: asyncHandler(async (req, res) => {
+    const body = updateMeBody.parse(req.body);
+    const requester = await usersService.getByUid(req.user!.uid);
+    const user = await usersService.update(requester.id, body);
+    res.json(user);
   }),
 
   // GET /users/me/obligations — cek tanggungan aktif user sendiri.
@@ -65,7 +79,7 @@ export const usersController = {
     res.json(user);
   }),
 
-  // Route guard: ADMIN+. Upsert by email — email unik, aman dipanggil lagi
+  // Route guard: LABORAN+. Upsert by email — email unik, aman dipanggil lagi
   // untuk user yang sudah ada.
   create: asyncHandler(async (req, res) => {
     const body = createBody.parse(req.body);
@@ -73,7 +87,7 @@ export const usersController = {
     res.status(201).json(user);
   }),
 
-  // Route guard: ADMIN+. Tidak menyentuh roles — untuk itu pakai PUT
+  // Route guard: LABORAN+. Tidak menyentuh roles — untuk itu pakai PUT
   // /users/:id/roles.
   update: asyncHandler(async (req, res) => {
     const body = updateBody.parse(req.body);
@@ -81,13 +95,13 @@ export const usersController = {
     res.json(user);
   }),
 
-  // Route guard: ADMIN+. Soft delete — set isActive=false.
+  // Route guard: LABORAN+. Soft delete — set isActive=false.
   remove: asyncHandler(async (req, res) => {
     const user = await usersService.softDelete(req.params.id!);
     res.json(user);
   }),
 
-  // Route guard: ADMIN+. Replace daftar roles user.
+  // Route guard: LABORAN+. Replace daftar roles user.
   replaceRoles: asyncHandler(async (req, res) => {
     const body = rolesBody.parse(req.body);
     const user = await usersService.replaceRoles(req.params.id!, body.roles);
