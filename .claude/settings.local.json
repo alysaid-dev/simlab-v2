@@ -103,7 +103,20 @@
       "Bash(echo \"fe=$?\")",
       "Bash(npx tsx *)",
       "Bash(grep -n '^async function\\\\|^function\\\\|^main\\\\|prisma.$disconnect\\\\|^}' /var/www/simlab-v2/backend/prisma/seed.ts)",
-      "Bash(git -C /var/www/simlab-v2 status --short)"
+      "Bash(git -C /var/www/simlab-v2 status --short)",
+      "Bash(cp /tmp/simlab-backup-1776863862/src/App.tsx src/App.tsx)",
+      "Bash(cp /tmp/simlab-backup-1776863862/src/components/DaftarBarangPanel.tsx src/components/DaftarBarangPanel.tsx)",
+      "Bash(cp /tmp/simlab-backup-1776863862/src/components/RiwayatDendaPanel.tsx src/components/RiwayatDendaPanel.tsx)",
+      "Bash(cp /tmp/simlab-backup-1776863862/src/components/TerimaBarangPanel.tsx src/components/TerimaBarangPanel.tsx)",
+      "Bash(cp /tmp/simlab-backup-1776863862/src/pages/MonitorTransaksi.tsx src/pages/MonitorTransaksi.tsx)",
+      "Bash(cp /tmp/simlab-backup-1776863862/backend/src/controllers/equipmentLoans.controller.ts backend/src/controllers/equipmentLoans.controller.ts)",
+      "Bash(cp /tmp/simlab-backup-1776863862/backend/src/routes/equipmentLoans.routes.ts backend/src/routes/equipmentLoans.routes.ts)",
+      "Bash(cp /tmp/simlab-backup-1776863862/backend/src/services/equipmentLoans.service.ts backend/src/services/equipmentLoans.service.ts)",
+      "Bash(cp /tmp/simlab-backup-1776863862/backend/src/services/notification/index.ts backend/src/services/notification/index.ts)",
+      "Bash(cp /tmp/simlab-backup-1776863862/backend/src/services/notification/templates.ts backend/src/services/notification/templates.ts)",
+      "Bash(cp /tmp/simlab-backup-1776863862/src/routes.ts src/routes.ts)",
+      "Bash(cp /tmp/simlab-backup-1776863862/src/lib/moduleAccess.ts src/lib/moduleAccess.ts)",
+      "Bash(cp /tmp/simlab-backup-1776863862/src/components/DashboardCard.tsx src/components/DashboardCard.tsx)"
     ]
   }
 }
