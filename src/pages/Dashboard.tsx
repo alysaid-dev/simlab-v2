@@ -4,6 +4,7 @@ import logoImage from "@/assets/logo-statistika.png";
 import { useAuth } from "@/contexts/AuthContext";
 import { canAccess } from "@/lib/moduleAccess";
 import { DashboardCard } from "../components/DashboardCard";
+import { AktivitasSayaCard } from "../components/AktivitasSayaCard";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -221,6 +222,8 @@ export default function Dashboard() {
 
       {/* Dashboard Cards */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <AktivitasSayaCard />
+
         {filteredModules.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {filteredModules.map((module) => (
