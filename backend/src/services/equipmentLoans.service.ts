@@ -7,11 +7,12 @@ export interface CreateEquipmentLoanInput {
   startDate: Date;
   endDate: Date;
   notes?: string;
+  status?: EquipmentLoanStatus;
   items: Array<{ equipmentId: string; quantity: number }>;
 }
 
 const LOAN_INCLUDE = {
-  user: { select: { id: true, displayName: true, uid: true } },
+  user: { select: { id: true, displayName: true, uid: true, email: true, waNumber: true } },
   items: {
     include: {
       equipment: { select: { id: true, name: true, category: true } },
@@ -115,6 +116,7 @@ export const equipmentLoansService = {
           startDate: input.startDate,
           endDate: input.endDate,
           notes: input.notes,
+          ...(input.status ? { status: input.status } : {}),
           items: {
             create: input.items.map((it) => ({
               equipmentId: it.equipmentId,
@@ -125,6 +127,21 @@ export const equipmentLoansService = {
         include: LOAN_INCLUDE,
       });
     });
+  },
+
+  async update(
+    id: string,
+    input: { endDate?: Date; notes?: string | null },
+  ) {
+    const loan = await prisma.equipmentLoan.update({
+      where: { id },
+      data: {
+        ...(input.endDate ? { endDate: input.endDate } : {}),
+        ...(input.notes !== undefined ? { notes: input.notes } : {}),
+      },
+      include: LOAN_INCLUDE,
+    });
+    return loan;
   },
 
   /**

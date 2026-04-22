@@ -10,6 +10,11 @@ router.get("/", equipmentLoansController.list);
 router.get("/:id", equipmentLoansController.getById);
 router.post("/", equipmentLoansController.create);
 router.patch(
+  "/:id",
+  requireRole("LABORAN", "KEPALA_LAB", "SUPER_ADMIN"),
+  equipmentLoansController.update
+);
+router.patch(
   "/:id/status",
   requireRole("LABORAN", "KEPALA_LAB", "SUPER_ADMIN"),
   equipmentLoansController.updateStatus

@@ -20,9 +20,10 @@ import {
   Loader2,
   AlertTriangle,
 } from "lucide-react";
+import { useDialog } from "../lib/dialog";
+import { apiFetch } from "../lib/apiFetch";
 
 type View = "transaksi" | "peminjaman-aktif" | "terlambat" | "aset" | "riwayat";
-type ToolCategory = "Elektronik" | "Optik" | "Audio" | "Mekanik" | "Lainnya";
 type ToolCondition = "Baik" | "Rusak Ringan" | "Rusak Berat" | "Hilang";
 type BorrowStatus = "Normal" | "Mendekati" | "Terlambat";
 
@@ -86,22 +87,6 @@ interface EquipmentLoanListResponse {
   take: number;
 }
 
-const allowedCategories: ToolCategory[] = [
-  "Elektronik",
-  "Optik",
-  "Audio",
-  "Mekanik",
-  "Lainnya",
-];
-
-function toToolCategory(raw: string | null | undefined): ToolCategory {
-  if (!raw) return "Lainnya";
-  const hit = allowedCategories.find(
-    (c) => c.toLowerCase() === raw.toLowerCase(),
-  );
-  return hit ?? "Lainnya";
-}
-
 const conditionFrontLabel: Record<BackendAssetCondition, ToolCondition> = {
   GOOD: "Baik",
   MINOR_DAMAGE: "Rusak Ringan",
@@ -156,7 +141,6 @@ function overdueDays(endIso: string): number {
 interface Tool {
   id: string;
   name: string;
-  category: ToolCategory;
   stock: number;
   totalStock: number;
   condition: ToolCondition;
@@ -169,6 +153,8 @@ interface CartItem {
 
 interface ActiveBorrowing {
   id: string;
+  backendId: string;
+  endDate: string;
   borrowerName: string;
   tools: { name: string; quantity: number }[];
   dueDate: string;
@@ -178,6 +164,7 @@ interface ActiveBorrowing {
 
 interface OverdueBorrowing {
   id: string;
+  backendId: string;
   borrowerName: string;
   tools: { name: string; quantity: number }[];
   dueDate: string;
@@ -195,13 +182,21 @@ interface HistoryRecord {
 }
 
 export default function PeminjamanAlat() {
+  const { alert } = useDialog();
   const [currentView, setCurrentView] = useState<View | null>(null);
+
+  // Default return date: +7 hari dari hari ini, jam 16:00.
+  const defaultReturnDate = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 7);
+    return d.toISOString().slice(0, 10);
+  })();
 
   // Transaksi states
   const [userId, setUserId] = useState("");
   const [userName, setUserName] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [returnDate, setReturnDate] = useState("2026-04-15");
+  const [returnDate, setReturnDate] = useState(defaultReturnDate);
   const [returnTime, setReturnTime] = useState("16:00");
   const [searchTerm, setSearchTerm] = useState("");
   const [barcodeInput, setBarcodeInput] = useState("");
@@ -225,7 +220,6 @@ export default function PeminjamanAlat() {
   const [toolForm, setToolForm] = useState({
     id: "",
     name: "",
-    category: "Elektronik" as ToolCategory,
     stock: 0,
     condition: "Baik" as ToolCondition,
   });
@@ -240,6 +234,26 @@ export default function PeminjamanAlat() {
   const [toolsCatalog, setToolsCatalog] = useState<Tool[]>([]);
   const [equipmentLoading, setEquipmentLoading] = useState(true);
   const [equipmentError, setEquipmentError] = useState<string | null>(null);
+
+  const refetchEquipment = async () => {
+    try {
+      const r = await apiFetch(`${API_BASE}/api/equipment`, { credentials: "include" });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = (await r.json()) as EquipmentListResponse;
+      setToolsCatalog(
+        data.items.map((e) => ({
+          id: e.id,
+          name: e.name,
+          stock: e.stock,
+          totalStock: e.stock,
+          condition: conditionFrontLabel[e.condition],
+        })),
+      );
+      setEquipmentError(null);
+    } catch (err) {
+      setEquipmentError(err instanceof Error ? err.message : "Gagal memuat peralatan");
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -256,8 +270,7 @@ export default function PeminjamanAlat() {
           data.items.map((e) => ({
             id: e.id,
             name: e.name,
-            category: toToolCategory(e.category),
-            stock: e.stock,
+              stock: e.stock,
             totalStock: e.stock,
             condition: conditionFrontLabel[e.condition],
           })),
@@ -284,6 +297,18 @@ export default function PeminjamanAlat() {
   const [allEqLoans, setAllEqLoans] = useState<BackendEquipmentLoan[]>([]);
   const [eqLoansLoading, setEqLoansLoading] = useState(true);
   const [eqLoansError, setEqLoansError] = useState<string | null>(null);
+
+  const refetchEqLoans = async () => {
+    try {
+      const r = await apiFetch(`${API_BASE}/api/equipment-loans`, { credentials: "include" });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = (await r.json()) as EquipmentLoanListResponse;
+      setAllEqLoans(data.items);
+      setEqLoansError(null);
+    } catch (err) {
+      setEqLoansError(err instanceof Error ? err.message : "Gagal memuat data peminjaman");
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -318,6 +343,8 @@ export default function PeminjamanAlat() {
     .filter((l) => l.status === "ACTIVE" || l.status === "OVERDUE")
     .map((l) => ({
       id: `TRX-ALT-${l.id.slice(0, 8).toUpperCase()}`,
+      backendId: l.id,
+      endDate: l.endDate,
       borrowerName: l.user?.displayName ?? "-",
       tools: l.items.map((it) => ({
         name: it.equipment?.name ?? "-",
@@ -335,6 +362,7 @@ export default function PeminjamanAlat() {
     .filter((l) => l.status === "OVERDUE" || (l.status === "ACTIVE" && overdueDays(l.endDate) > 0))
     .map((l) => ({
       id: `TRX-ALT-${l.id.slice(0, 8).toUpperCase()}`,
+      backendId: l.id,
       borrowerName: l.user?.displayName ?? "-",
       tools: l.items.map((it) => ({
         name: it.equipment?.name ?? "-",
@@ -362,15 +390,24 @@ export default function PeminjamanAlat() {
     }));
 
 
-  const handleUserIdChange = (value: string) => {
+  const handleUserIdChange = async (value: string) => {
     setUserId(value);
-    // Auto-fill name based on ID (mock data)
-    if (value === "20611001") {
-      setUserName("Ahmad Fauzan");
-    } else if (value) {
-      setUserName("Mahasiswa Test");
-    } else {
-      setUserName("");
+    setUserName("");
+    const trimmed = value.trim();
+    if (trimmed.length < 3) return;
+    try {
+      const r = await apiFetch(
+        `${API_BASE}/api/users?search=${encodeURIComponent(trimmed)}&take=10`,
+        { credentials: "include" },
+      );
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = (await r.json()) as {
+        items: Array<{ uid: string; displayName: string }>;
+      };
+      const match = data.items.find((u) => u.uid === trimmed);
+      if (match) setUserName(match.displayName);
+    } catch {
+      // abaikan; nama kosong = user belum ketemu
     }
   };
 
@@ -411,9 +448,49 @@ export default function PeminjamanAlat() {
     setCart(cart.filter((item) => item.tool.id !== toolId));
   };
 
-  const handleSubmitTransaction = () => {
-    console.log("Transaction submitted:", { userId, userName, cart, returnDate, returnTime });
-    setShowSuccess(true);
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmitTransaction = async () => {
+    if (!userId.trim() || !userName || cart.length === 0) {
+      await alert("Lengkapi ID peminjam dan minimal pilih satu alat");
+      return;
+    }
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      const end = new Date(`${returnDate}T${returnTime || "16:00"}:00`);
+      if (Number.isNaN(end.getTime())) {
+        await alert("Tanggal / waktu kembali tidak valid");
+        return;
+      }
+      const r = await apiFetch(`${API_BASE}/api/equipment-loans`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userUid: userId.trim(),
+          startDate: new Date().toISOString(),
+          endDate: end.toISOString(),
+          status: "ACTIVE",
+          items: cart.map((c) => ({
+            equipmentId: c.tool.id,
+            quantity: c.quantity,
+          })),
+        }),
+      });
+      if (!r.ok) {
+        const body = (await r.json().catch(() => null)) as { message?: string } | null;
+        throw new Error(body?.message ?? `HTTP ${r.status}`);
+      }
+      await Promise.all([refetchEquipment(), refetchEqLoans()]);
+      setShowSuccess(true);
+    } catch (err) {
+      await alert(
+        `Gagal mencatat peminjaman: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleNewTransaction = () => {
@@ -421,23 +498,8 @@ export default function PeminjamanAlat() {
     setUserId("");
     setUserName("");
     setCart([]);
-    setReturnDate("2026-04-15");
+    setReturnDate(defaultReturnDate);
     setReturnTime("16:00");
-  };
-
-  const getCategoryColor = (category: ToolCategory) => {
-    switch (category) {
-      case "Elektronik":
-        return "bg-blue-100 text-blue-700";
-      case "Optik":
-        return "bg-purple-100 text-purple-700";
-      case "Audio":
-        return "bg-pink-100 text-pink-700";
-      case "Mekanik":
-        return "bg-orange-100 text-orange-700";
-      default:
-        return "bg-gray-100 text-gray-700";
-    }
   };
 
   const getStatusColor = (status: BorrowStatus) => {
@@ -671,12 +733,7 @@ export default function PeminjamanAlat() {
                       tool.stock === 0 ? "opacity-50 bg-gray-50" : "hover:shadow-md transition-shadow"
                     }`}
                   >
-                    <p className="font-medium text-sm text-gray-900 mb-1">{tool.name}</p>
-                    <span
-                      className={`inline-block text-xs px-2 py-0.5 rounded ${getCategoryColor(tool.category)} mb-2`}
-                    >
-                      {tool.category}
-                    </span>
+                    <p className="font-medium text-sm text-gray-900 mb-2">{tool.name}</p>
                     <div className="flex items-center justify-between">
                       <p className="text-xs text-gray-500">Stok: {tool.stock}</p>
                       {tool.stock === 0 ? (
@@ -754,10 +811,10 @@ export default function PeminjamanAlat() {
 
                   <button
                     onClick={handleSubmitTransaction}
-                    disabled={!userId || cart.length === 0}
+                    disabled={!userId || !userName || cart.length === 0 || submitting}
                     className="w-full px-6 py-3 bg-blue-900 text-white rounded-lg hover:bg-blue-800 transition-colors font-medium disabled:bg-gray-300 disabled:cursor-not-allowed"
                   >
-                    Catat Transaksi
+                    {submitting ? "Mencatat…" : "Catat Transaksi"}
                   </button>
                 </>
               )}
@@ -987,12 +1044,32 @@ export default function PeminjamanAlat() {
                       Batal
                     </button>
                     <button
-                      onClick={() => {
-                        console.log("Return confirmed:", toolCondition, returnNotes);
-                        alert("Alat berhasil dikembalikan!");
-                        setShowKembalikanModal(false);
-                        setToolCondition("Baik");
-                        setReturnNotes("");
+                      onClick={async () => {
+                        if (!selectedBorrowing) return;
+                        try {
+                          const r = await apiFetch(
+                            `${API_BASE}/api/equipment-loans/${encodeURIComponent(selectedBorrowing.backendId)}/status`,
+                            {
+                              method: "PATCH",
+                              credentials: "include",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ status: "RETURNED" }),
+                            },
+                          );
+                          if (!r.ok) {
+                            const body = (await r.json().catch(() => null)) as { message?: string } | null;
+                            throw new Error(body?.message ?? `HTTP ${r.status}`);
+                          }
+                          await Promise.all([refetchEquipment(), refetchEqLoans()]);
+                          setShowKembalikanModal(false);
+                          setToolCondition("Baik");
+                          setReturnNotes("");
+                          await alert("Pengembalian alat berhasil dicatat", { title: "Berhasil" });
+                        } catch (err) {
+                          await alert(
+                            `Gagal mencatat pengembalian: ${err instanceof Error ? err.message : String(err)}`,
+                          );
+                        }
                       }}
                       className="flex-1 px-4 py-2 bg-blue-900 text-white rounded-lg hover:bg-blue-800 transition-colors"
                     >
@@ -1077,10 +1154,38 @@ export default function PeminjamanAlat() {
                       Batal
                     </button>
                     <button
-                      onClick={() => {
-                        console.log("Extension confirmed:", extensionDate);
-                        alert("Peminjaman berhasil diperpanjang!");
-                        setShowPerpanjangModal(false);
+                      onClick={async () => {
+                        if (!selectedBorrowing) return;
+                        try {
+                          const existingEnd = new Date(selectedBorrowing.endDate);
+                          const hours = existingEnd.getHours();
+                          const minutes = existingEnd.getMinutes();
+                          const newEnd = new Date(`${extensionDate}T${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:00`);
+                          if (Number.isNaN(newEnd.getTime())) {
+                            await alert("Tanggal perpanjangan tidak valid");
+                            return;
+                          }
+                          const r = await apiFetch(
+                            `${API_BASE}/api/equipment-loans/${encodeURIComponent(selectedBorrowing.backendId)}`,
+                            {
+                              method: "PATCH",
+                              credentials: "include",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ endDate: newEnd.toISOString() }),
+                            },
+                          );
+                          if (!r.ok) {
+                            const body = (await r.json().catch(() => null)) as { message?: string } | null;
+                            throw new Error(body?.message ?? `HTTP ${r.status}`);
+                          }
+                          await refetchEqLoans();
+                          setShowPerpanjangModal(false);
+                          await alert("Perpanjangan berhasil dicatat", { title: "Berhasil" });
+                        } catch (err) {
+                          await alert(
+                            `Gagal memperpanjang: ${err instanceof Error ? err.message : String(err)}`,
+                          );
+                        }
                       }}
                       className="flex-1 px-4 py-2 bg-blue-900 text-white rounded-lg hover:bg-blue-800 transition-colors"
                     >
@@ -1145,15 +1250,11 @@ export default function PeminjamanAlat() {
                     <td className="py-3 px-4">
                       <button
                         onClick={() => {
-                          setSelectedBorrowing({
-                            id: borrowing.id,
-                            borrowerName: borrowing.borrowerName,
-                            tools: borrowing.tools,
-                            dueDate: borrowing.dueDate,
-                            dueTime: "",
-                            status: "Terlambat",
-                          });
-                          setShowKembalikanModal(true);
+                          const full = activeBorrowings.find((a) => a.backendId === borrowing.backendId);
+                          if (full) {
+                            setSelectedBorrowing(full);
+                            setShowKembalikanModal(true);
+                          }
                         }}
                         className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
                       >
@@ -1194,7 +1295,7 @@ export default function PeminjamanAlat() {
               </button>
               <button
                 onClick={() => {
-                  setToolForm({ id: "", name: "", category: "Elektronik", stock: 0, condition: "Baik" });
+                  setToolForm({ id: "", name: "", stock: 0, condition: "Baik" });
                   setShowAddToolModal(true);
                 }}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
@@ -1212,7 +1313,6 @@ export default function PeminjamanAlat() {
                 <tr className="border-b">
                   <th className="text-left py-3 px-4 font-semibold text-gray-900">ID Alat</th>
                   <th className="text-left py-3 px-4 font-semibold text-gray-900">Nama Alat</th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-900">Kategori</th>
                   <th className="text-left py-3 px-4 font-semibold text-gray-900">Stok Tersedia</th>
                   <th className="text-left py-3 px-4 font-semibold text-gray-900">Stok Total</th>
                   <th className="text-left py-3 px-4 font-semibold text-gray-900">Kondisi</th>
@@ -1224,11 +1324,6 @@ export default function PeminjamanAlat() {
                   <tr key={index} className="border-b hover:bg-gray-50">
                     <td className="py-3 px-4 font-mono text-sm text-gray-500">{tool.id}</td>
                     <td className="py-3 px-4 text-gray-700">{tool.name}</td>
-                    <td className="py-3 px-4">
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${getCategoryColor(tool.category)}`}>
-                        {tool.category}
-                      </span>
-                    </td>
                     <td className={`py-3 px-4 font-bold ${tool.stock === 0 ? "text-red-600 bg-red-100" : "text-gray-700"}`}>
                       {tool.stock}
                     </td>
@@ -1246,7 +1341,6 @@ export default function PeminjamanAlat() {
                             setToolForm({
                               id: tool.id,
                               name: tool.name,
-                              category: tool.category,
                               stock: tool.stock,
                               condition: tool.condition,
                             });
@@ -1311,23 +1405,6 @@ export default function PeminjamanAlat() {
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Kategori <span className="text-red-500">*</span>
-                      </label>
-                      <select
-                        value={toolForm.category}
-                        onChange={(e) => setToolForm({ ...toolForm, category: e.target.value as ToolCategory })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      >
-                        <option>Elektronik</option>
-                        <option>Optik</option>
-                        <option>Audio</option>
-                        <option>Mekanik</option>
-                        <option>Lainnya</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         Stok Awal <span className="text-red-500">*</span>
                       </label>
                       <input
@@ -1363,9 +1440,9 @@ export default function PeminjamanAlat() {
                       Batal
                     </button>
                     <button
-                      onClick={() => {
+                      onClick={async () => {
                         console.log("Tool added:", toolForm);
-                        alert("Alat berhasil ditambahkan!");
+                        await alert("Alat berhasil ditambahkan!", { title: "Berhasil" });
                         setShowAddToolModal(false);
                       }}
                       className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -1418,23 +1495,6 @@ export default function PeminjamanAlat() {
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Kategori <span className="text-red-500">*</span>
-                      </label>
-                      <select
-                        value={toolForm.category}
-                        onChange={(e) => setToolForm({ ...toolForm, category: e.target.value as ToolCategory })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      >
-                        <option>Elektronik</option>
-                        <option>Optik</option>
-                        <option>Audio</option>
-                        <option>Mekanik</option>
-                        <option>Lainnya</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         Stok <span className="text-red-500">*</span>
                       </label>
                       <input
@@ -1471,9 +1531,9 @@ export default function PeminjamanAlat() {
                       Batal
                     </button>
                     <button
-                      onClick={() => {
+                      onClick={async () => {
                         console.log("Tool updated:", toolForm);
-                        alert("Alat berhasil diperbarui!");
+                        await alert("Alat berhasil diperbarui!", { title: "Berhasil" });
                         setShowEditToolModal(false);
                       }}
                       className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -1504,7 +1564,7 @@ export default function PeminjamanAlat() {
                   <div className="border-2 border-dashed border-gray-300 rounded-lg bg-gray-50 p-8 text-center mb-4">
                     <Upload className="w-12 h-12 text-gray-400 mx-auto mb-3" />
                     <p className="text-gray-700 mb-1">Seret file CSV ke sini atau klik untuk memilih</p>
-                    <p className="text-xs text-gray-500">Format: ID Alat, Nama Alat, Kategori, Stok, Kondisi</p>
+                    <p className="text-xs text-gray-500">Format: ID Alat, Nama Alat, Stok, Kondisi</p>
                   </div>
 
                   <div className="mb-6">

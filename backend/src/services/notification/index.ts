@@ -290,3 +290,24 @@ export async function notifyCancelledBySystemToMahasiswa(
 ): Promise<ChannelResults> {
   return dispatch(recipient, t.cancelledBySystemToMahasiswa(params));
 }
+
+export async function notifyEquipmentLoanActivatedToMahasiswa(
+  recipient: Recipient,
+  params: t.EquipmentLoanActivatedParams,
+): Promise<ChannelResults> {
+  return dispatch(recipient, t.equipmentLoanActivatedToMahasiswa(params));
+}
+
+export async function notifyEquipmentLoanReturnedToMahasiswa(
+  recipient: Recipient,
+  params: t.EquipmentLoanReturnedParams,
+): Promise<ChannelResults> {
+  return dispatch(recipient, t.equipmentLoanReturnedToMahasiswa(params));
+}
+
+export async function notifyEquipmentLoanExtendedToMahasiswa(
+  recipient: Recipient,
+  params: t.EquipmentLoanExtendedParams,
+): Promise<ChannelResults> {
+  return dispatch(recipient, t.equipmentLoanExtendedToMahasiswa(params));
+}

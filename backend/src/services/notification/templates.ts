@@ -1380,3 +1380,203 @@ Silakan konfirmasi melalui nomor atau email ini${p0.kontak ? `: ${p0.kontak}` : 
   return { subject, html, whatsapp };
 }
 
+// ---------------------------------------------------------------------------
+// Mahasiswa — serah terima peminjaman alat (walk-in / laboran-initiated)
+// ---------------------------------------------------------------------------
+export interface EquipmentLoanItemParam {
+  nama: string;
+  jumlah: number;
+}
+
+export interface EquipmentLoanActivatedParams {
+  namaMahasiswa: string;
+  nim: string;
+  items: EquipmentLoanItemParam[];
+  totalItem: number;
+  tanggalHarusKembali: string;
+  diserahkanOleh: string;
+  waktuTransaksi: string;
+  linkSimlab?: string;
+}
+
+function equipmentItemsHtml(items: EquipmentLoanItemParam[]): string {
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:16px 0;border:1px solid #e2e8f0">
+    <tr style="background:#f8fafc">
+      <th style="padding:10px 12px;border:1px solid #e2e8f0;text-align:left;font-size:13px;font-weight:600">Nama Alat</th>
+      <th style="padding:10px 12px;border:1px solid #e2e8f0;text-align:right;font-size:13px;font-weight:600;width:20%">Jumlah</th>
+    </tr>
+    ${items
+      .map(
+        (it) => `<tr>
+          <td style="padding:10px 12px;border:1px solid #e2e8f0;font-size:14px">${it.nama}</td>
+          <td style="padding:10px 12px;border:1px solid #e2e8f0;font-size:14px;text-align:right;font-weight:600">${it.jumlah}</td>
+        </tr>`,
+      )
+      .join('')}
+  </table>`;
+}
+
+export function equipmentLoanActivatedToMahasiswa(p0: EquipmentLoanActivatedParams): NotificationTemplate {
+  const link = p0.linkSimlab ?? SIMLAB_URL;
+  const subject = '[SIMLAB] Peminjaman Alat Tercatat — Serah Terima Selesai';
+  const html = emailLayout({
+    greeting: `Yth. ${p0.namaMahasiswa}`,
+    bodyHtml:
+      p('Peminjaman alat laboratorium Anda telah dicatat oleh laboran. Berikut detail peminjaman:') +
+      detailTable([
+        ['Nama', p0.namaMahasiswa],
+        ['NIM / ID', p0.nim],
+        ['Waktu Transaksi', p0.waktuTransaksi],
+        ['Diserahkan Oleh', p0.diserahkanOleh],
+        ['Total Item', `${p0.totalItem}`],
+        ['Tanggal Harus Kembali', p0.tanggalHarusKembali],
+      ]) +
+      p('<strong>Rincian Alat:</strong>') +
+      equipmentItemsHtml(p0.items) +
+      p('Mohon jaga alat dengan baik dan kembalikan tepat waktu. Jika ada ketidaksesuaian, segera hubungi laboran.'),
+    linkSimlab: link,
+    linkLabel: 'Pantau Peminjaman',
+  });
+  const whatsapp = `${WA_SALAM}
+
+*Peminjaman Alat Tercatat*
+
+Yth. ${p0.namaMahasiswa},
+Peminjaman alat laboratorium Anda telah dicatat oleh laboran.
+
+${waDetails([
+  ['👤 Nama', p0.namaMahasiswa],
+  ['🆔 NIM/ID', p0.nim],
+  ['🕒 Waktu', p0.waktuTransaksi],
+  ['👨‍💼 Diserahkan Oleh', p0.diserahkanOleh],
+  ['📦 Total Item', `${p0.totalItem}`],
+  ['📅 Harus Kembali', p0.tanggalHarusKembali],
+])}
+
+*Rincian Alat:*
+${p0.items.map((it) => `• ${it.nama} — ${it.jumlah}`).join('\n')}
+
+Mohon jaga alat dengan baik dan kembalikan tepat waktu.
+
+🔗 ${link}${WA_FOOTER}`;
+  return { subject, html, whatsapp };
+}
+
+// ---------------------------------------------------------------------------
+// Mahasiswa — pengembalian peminjaman alat tercatat
+// ---------------------------------------------------------------------------
+export interface EquipmentLoanReturnedParams {
+  namaMahasiswa: string;
+  nim: string;
+  items: EquipmentLoanItemParam[];
+  totalItem: number;
+  tanggalKembali: string;
+  diterimaOleh: string;
+  catatan?: string;
+  linkSimlab?: string;
+}
+
+export function equipmentLoanReturnedToMahasiswa(p0: EquipmentLoanReturnedParams): NotificationTemplate {
+  const link = p0.linkSimlab ?? SIMLAB_URL;
+  const subject = '[SIMLAB] Konfirmasi Pengembalian Alat';
+  const html = emailLayout({
+    greeting: `Yth. ${p0.namaMahasiswa}`,
+    bodyHtml:
+      p('Pengembalian alat laboratorium Anda telah berhasil dicatat oleh laboran. Berikut detail pengembalian:') +
+      detailTable([
+        ['Nama', p0.namaMahasiswa],
+        ['NIM / ID', p0.nim],
+        ['Tanggal Kembali', p0.tanggalKembali],
+        ['Diterima Oleh', p0.diterimaOleh],
+        ['Total Item', `${p0.totalItem}`],
+        ...(p0.catatan ? ([['Catatan', p0.catatan]] as Array<[string, string]>) : []),
+      ]) +
+      p('<strong>Rincian Alat yang Dikembalikan:</strong>') +
+      equipmentItemsHtml(p0.items) +
+      p('Terima kasih telah mengembalikan alat sesuai prosedur. Jika ada ketidaksesuaian, mohon segera menghubungi laboran.'),
+    linkSimlab: link,
+    linkLabel: 'Buka SIMLAB',
+  });
+  const whatsapp = `${WA_SALAM}
+
+*Pengembalian Alat Tercatat*
+
+Yth. ${p0.namaMahasiswa},
+Pengembalian alat laboratorium Anda telah berhasil dicatat.
+
+${waDetails([
+  ['👤 Nama', p0.namaMahasiswa],
+  ['🆔 NIM/ID', p0.nim],
+  ['📅 Tanggal Kembali', p0.tanggalKembali],
+  ['👤 Diterima Oleh', p0.diterimaOleh],
+  ['📦 Total Item', `${p0.totalItem}`],
+  ...(p0.catatan ? ([['📝 Catatan', p0.catatan]] as Array<[string, string]>) : []),
+])}
+
+*Rincian Alat Dikembalikan:*
+${p0.items.map((it) => `• ${it.nama} — ${it.jumlah}`).join('\n')}
+
+Terima kasih. Jika ada ketidaksesuaian, mohon segera menghubungi laboran.
+🔗 ${link}${WA_FOOTER}`;
+  return { subject, html, whatsapp };
+}
+
+// ---------------------------------------------------------------------------
+// Mahasiswa — perpanjangan peminjaman alat
+// ---------------------------------------------------------------------------
+export interface EquipmentLoanExtendedParams {
+  namaMahasiswa: string;
+  nim: string;
+  items: EquipmentLoanItemParam[];
+  totalItem: number;
+  tanggalLama: string;
+  tanggalBaru: string;
+  diprosesOleh: string;
+  linkSimlab?: string;
+}
+
+export function equipmentLoanExtendedToMahasiswa(p0: EquipmentLoanExtendedParams): NotificationTemplate {
+  const link = p0.linkSimlab ?? SIMLAB_URL;
+  const subject = '[SIMLAB] Perpanjangan Peminjaman Alat';
+  const html = emailLayout({
+    greeting: `Yth. ${p0.namaMahasiswa}`,
+    bodyHtml:
+      p('Peminjaman alat laboratorium Anda telah diperpanjang. Berikut detail perubahan:') +
+      detailTable([
+        ['Nama', p0.namaMahasiswa],
+        ['NIM / ID', p0.nim],
+        ['Tanggal Jatuh Tempo Sebelumnya', p0.tanggalLama],
+        ['Tanggal Jatuh Tempo Baru', p0.tanggalBaru],
+        ['Diproses Oleh', p0.diprosesOleh],
+        ['Total Item', `${p0.totalItem}`],
+      ]) +
+      p('<strong>Rincian Alat:</strong>') +
+      equipmentItemsHtml(p0.items) +
+      p('Mohon kembalikan atau perpanjang kembali paling lambat tanggal baru di atas.'),
+    linkSimlab: link,
+    linkLabel: 'Pantau Peminjaman',
+  });
+  const whatsapp = `${WA_SALAM}
+
+*Perpanjangan Peminjaman Alat*
+
+Yth. ${p0.namaMahasiswa},
+Peminjaman alat laboratorium Anda telah diperpanjang.
+
+${waDetails([
+  ['👤 Nama', p0.namaMahasiswa],
+  ['🆔 NIM/ID', p0.nim],
+  ['📅 Jatuh Tempo Lama', p0.tanggalLama],
+  ['📅 Jatuh Tempo Baru', p0.tanggalBaru],
+  ['👤 Diproses Oleh', p0.diprosesOleh],
+  ['📦 Total Item', `${p0.totalItem}`],
+])}
+
+*Rincian Alat:*
+${p0.items.map((it) => `• ${it.nama} — ${it.jumlah}`).join('\n')}
+
+Mohon kembalikan atau perpanjang kembali paling lambat tanggal baru di atas.
+🔗 ${link}${WA_FOOTER}`;
+  return { subject, html, whatsapp };
+}
+
