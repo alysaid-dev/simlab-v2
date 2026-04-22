@@ -116,7 +116,13 @@
       "Bash(cp /tmp/simlab-backup-1776863862/backend/src/services/notification/templates.ts backend/src/services/notification/templates.ts)",
       "Bash(cp /tmp/simlab-backup-1776863862/src/routes.ts src/routes.ts)",
       "Bash(cp /tmp/simlab-backup-1776863862/src/lib/moduleAccess.ts src/lib/moduleAccess.ts)",
-      "Bash(cp /tmp/simlab-backup-1776863862/src/components/DashboardCard.tsx src/components/DashboardCard.tsx)"
+      "Bash(cp /tmp/simlab-backup-1776863862/src/components/DashboardCard.tsx src/components/DashboardCard.tsx)",
+      "Bash(grep -nA 20 \"^\\\\s*\\\\\\(async\\\\s*\\\\\\)\\\\?list\\\\s*\\(\\\\|^\\\\s*list:\\\\s*async\" backend/src/services/loans.service.ts backend/src/services/clearances.service.ts backend/src/services/reservations.service.ts backend/src/services/equipmentLoans.service.ts)",
+      "Bash(grep -nA 8 \"getById:\\\\s*async\\\\|^\\\\s*async getById\" backend/src/controllers/users.controller.ts)",
+      "Bash(grep -nA 15 \"^\\\\s*get:\\\\s*async\\\\|get:\\\\s*asyncHandler\" backend/src/controllers/appSettings.controller.ts)",
+      "Bash(grep -nA 10 \"^\\\\s*list:\\\\s*async\\\\|list:\\\\s*asyncHandler\" backend/src/controllers/assets.controller.ts)",
+      "Bash(grep -nA 25 \"replaceRoles:\\\\s*async\\\\|replaceRoles:\\\\s*asyncHandler\" backend/src/controllers/users.controller.ts)",
+      "Bash(grep *)"
     ]
   }
 }
