@@ -93,75 +93,38 @@ interface CurrentBorrower {
   jenis: "Tugas Akhir" | "Praktikum";
 }
 
-// Mock borrowing history data
-const mockBorrowingHistory: Record<string, BorrowingHistory[]> = {
-  "AST-003": [
-    {
-      no: 1,
-      namaPeminjam: "Siti Nurhaliza",
-      nim: "21611038",
-      jenis: "Praktikum",
-      tanggalPinjam: "15 Februari 2026",
-      tanggalKembali: "15 Februari 2026"
-    },
-    {
-      no: 2,
-      namaPeminjam: "Ahmad Fauzi",
-      nim: "21611025",
-      jenis: "Tugas Akhir",
-      tanggalPinjam: "8 Februari 2026",
-      tanggalKembali: "22 Februari 2026"
-    },
-    {
-      no: 3,
-      namaPeminjam: "Dewi Kusuma",
-      nim: "21611019",
-      jenis: "Praktikum",
-      tanggalPinjam: "1 Februari 2026",
-      tanggalKembali: "1 Februari 2026"
-    }
-  ],
-  "AST-007": [
-    {
-      no: 1,
-      namaPeminjam: "Budi Santoso",
-      nim: "21611055",
-      jenis: "Praktikum",
-      tanggalPinjam: "10 Maret 2026",
-      tanggalKembali: "10 Maret 2026"
-    },
-    {
-      no: 2,
-      namaPeminjam: "Lestari Wulandari",
-      nim: "21611048",
-      jenis: "Tugas Akhir",
-      tanggalPinjam: "5 Maret 2026",
-      tanggalKembali: "19 Maret 2026"
-    }
-  ]
-};
+interface BackendLoan {
+  id: string;
+  type: "TA" | "PRACTICUM";
+  status:
+    | "PENDING"
+    | "APPROVED_BY_DOSEN"
+    | "APPROVED"
+    | "REJECTED"
+    | "ACTIVE"
+    | "RETURNED"
+    | "OVERDUE"
+    | "CANCELLED";
+  startDate: string;
+  endDate: string;
+  returnDate: string | null;
+  borrower: { uid: string; displayName: string };
+}
 
-// Mock current borrower data
-const mockCurrentBorrower: Record<string, CurrentBorrower> = {
-  "AST-003": {
-    namaPeminjam: "Rizky Aditya Pratama",
-    nim: "21611042",
-    batasKembali: "2 April 2026 16:00",
-    jenis: "Tugas Akhir"
-  },
-  "AST-002": {
-    namaPeminjam: "Anisa Rahma Putri",
-    nim: "21611033",
-    batasKembali: "30 Maret 2026 16:00",
-    jenis: "Praktikum"
-  },
-  "AST-007": {
-    namaPeminjam: "Fajar Ramadhan",
-    nim: "21611061",
-    batasKembali: "28 Maret 2026 16:00",
-    jenis: "Tugas Akhir"
-  }
-};
+function fmtDateID(iso: string | null | undefined): string {
+  if (!iso) return "-";
+  return new Date(iso).toLocaleString("id-ID", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function loanTypeToJenis(t: BackendLoan["type"]): "Tugas Akhir" | "Praktikum" {
+  return t === "TA" ? "Tugas Akhir" : "Praktikum";
+}
 
 export default function Aset() {
   const [activeMenu, setActiveMenu] = useState<string>("");
@@ -178,6 +141,9 @@ export default function Aset() {
   
   // Detail Peminjaman view
   const [viewingAssetDetail, setViewingAssetDetail] = useState<Asset | null>(null);
+  const [detailLoans, setDetailLoans] = useState<BackendLoan[] | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
   
   // Form fields
   const [formId, setFormId] = useState("");
@@ -209,6 +175,44 @@ export default function Aset() {
       cancelled = true;
     };
   }, []);
+
+  // Fetch loans saat asset di-view (eye-modal). Server filter by assetId —
+  // kita bedakan sendiri current (ACTIVE/OVERDUE) vs riwayat (RETURNED/dst)
+  // di render.
+  useEffect(() => {
+    if (!viewingAssetDetail) {
+      setDetailLoans(null);
+      setDetailError(null);
+      return;
+    }
+    let cancelled = false;
+    setDetailLoading(true);
+    setDetailError(null);
+    setDetailLoans(null);
+    fetch(
+      `${API_BASE}/api/loans?assetId=${encodeURIComponent(viewingAssetDetail.dbId)}&take=200`,
+      { credentials: "include" },
+    )
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return (await r.json()) as { items: BackendLoan[] };
+      })
+      .then((data) => {
+        if (!cancelled) setDetailLoans(data.items);
+      })
+      .catch((err) => {
+        if (!cancelled)
+          setDetailError(
+            err instanceof Error ? err.message : "Gagal memuat peminjaman",
+          );
+      })
+      .finally(() => {
+        if (!cancelled) setDetailLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [viewingAssetDetail]);
 
   const handleAddAsset = () => {
     setFormId("");
@@ -430,9 +434,33 @@ export default function Aset() {
       case "Daftar Aset":
         // Show detail view if an asset is selected
         if (viewingAssetDetail) {
-          const currentBorrower = mockCurrentBorrower[viewingAssetDetail.id];
-          const history = mockBorrowingHistory[viewingAssetDetail.id] || [];
-          
+          // Loan aktif = ACTIVE atau OVERDUE. Sisanya (RETURNED, REJECTED,
+          // CANCELLED) masuk riwayat. PENDING/APPROVED_BY_DOSEN/APPROVED =
+          // pengajuan yang belum serah-terima — skip, belum "peminjaman".
+          const activeLoan = (detailLoans ?? []).find(
+            (l) => l.status === "ACTIVE" || l.status === "OVERDUE",
+          );
+          const currentBorrower: CurrentBorrower | null = activeLoan
+            ? {
+                namaPeminjam: activeLoan.borrower.displayName,
+                nim: activeLoan.borrower.uid,
+                batasKembali: fmtDateID(activeLoan.endDate),
+                jenis: loanTypeToJenis(activeLoan.type),
+              }
+            : null;
+          const history: BorrowingHistory[] = (detailLoans ?? [])
+            .filter((l) =>
+              ["RETURNED", "REJECTED", "CANCELLED"].includes(l.status),
+            )
+            .map((l, idx) => ({
+              no: idx + 1,
+              namaPeminjam: l.borrower.displayName,
+              nim: l.borrower.uid,
+              jenis: loanTypeToJenis(l.type),
+              tanggalPinjam: fmtDateID(l.startDate),
+              tanggalKembali: fmtDateID(l.returnDate ?? l.endDate),
+            }));
+
           const getJenisBadge = (jenis: "Tugas Akhir" | "Praktikum") => {
             return jenis === "Tugas Akhir" ? (
               <Badge className="bg-indigo-100 text-indigo-800 hover:bg-indigo-100">Tugas Akhir</Badge>
@@ -477,6 +505,19 @@ export default function Aset() {
                   </div>
                 </div>
               </Card>
+
+              {detailLoading && (
+                <div className="mb-4 flex items-center gap-2 text-sm text-gray-500">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Memuat data peminjaman...
+                </div>
+              )}
+              {detailError && (
+                <Alert variant="destructive" className="mb-4">
+                  <AlertCircle className="w-4 h-4" />
+                  <AlertDescription>{detailError}</AlertDescription>
+                </Alert>
+              )}
 
               {/* Current Borrower Section */}
               <div className="mb-6">

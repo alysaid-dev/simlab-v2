@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { PageLayout } from "../components/PageLayout";
 import { UserCheck, X, Loader2, AlertTriangle } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { apiFetch } from "../lib/apiFetch";
 
 type View = "permohonan-persetujuan" | "riwayat-persetujuan";
 
@@ -114,7 +115,7 @@ export default function PersetujuanDosen() {
     let cancelled = false;
     setLoansLoading(true);
     setLoansError(null);
-    fetch(
+    apiFetch(
       `${API_BASE}/api/loans?${loansQuery}`,
       { credentials: "include" },
     )
@@ -156,7 +157,7 @@ export default function PersetujuanDosen() {
 
   const refetchLoans = () => {
     if (!lecturerId && !isSuperAdmin) return;
-    fetch(
+    apiFetch(
       `${API_BASE}/api/loans?${loansQuery}`,
       { credentials: "include" },
     )
@@ -199,7 +200,7 @@ export default function PersetujuanDosen() {
       tindakanForm.tindakan === "Setujui" ? "APPROVED_BY_DOSEN" : "REJECTED";
     setSubmitting(true);
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `${API_BASE}/api/loans/${encodeURIComponent(selectedRecord.id)}/status`,
         {
           method: "PATCH",

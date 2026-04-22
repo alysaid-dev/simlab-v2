@@ -2,6 +2,7 @@ import { Navigate, useLocation } from "react-router";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import type { ReactNode } from "react";
+import { canAccess } from "@/lib/moduleAccess";
 
 function FullScreenSpinner() {
   return (
@@ -21,6 +22,13 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
   if (loading) return <FullScreenSpinner />;
   if (!user) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
+  // Role-based module access — selain dashboard yang selalu terbuka.
+  if (
+    location.pathname !== "/dashboard" &&
+    !canAccess(location.pathname, user.roles)
+  ) {
+    return <Navigate to="/dashboard" replace />;
   }
   return <>{children}</>;
 }

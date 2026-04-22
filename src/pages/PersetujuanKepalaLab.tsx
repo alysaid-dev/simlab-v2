@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { PageLayout } from "../components/PageLayout";
 import { Shield, X, Loader2, AlertTriangle, Construction } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { apiFetch } from "../lib/apiFetch";
 
 type View = "peminjaman-laptop" | "peminjaman-ruangan" | "bebas-lab";
 
@@ -104,7 +105,7 @@ export default function PersetujuanKepalaLab() {
     let cancelled = false;
     setLoansLoading(true);
     setLoansError(null);
-    fetch(`${API_BASE}/api/loans?status=APPROVED_BY_DOSEN`, { credentials: "include" })
+    apiFetch(`${API_BASE}/api/loans?status=APPROVED_BY_DOSEN`, { credentials: "include" })
       .then(async (r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return (await r.json()) as LoanListResponse;
@@ -174,7 +175,7 @@ export default function PersetujuanKepalaLab() {
   const fetchReservations = () => {
     setReservationsLoading(true);
     setReservationsError(null);
-    return fetch(`${API_BASE}/api/reservations?status=CHECKED`, {
+    return apiFetch(`${API_BASE}/api/reservations?status=CHECKED`, {
       credentials: "include",
     })
       .then(async (r) => {
@@ -197,7 +198,7 @@ export default function PersetujuanKepalaLab() {
     let cancelled = false;
     setReservationsLoading(true);
     setReservationsError(null);
-    fetch(`${API_BASE}/api/reservations?status=CHECKED`, {
+    apiFetch(`${API_BASE}/api/reservations?status=CHECKED`, {
       credentials: "include",
     })
       .then(async (r) => {
@@ -232,7 +233,7 @@ export default function PersetujuanKepalaLab() {
       return;
     const status = setuju ? "APPROVED" : "REJECTED";
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `${API_BASE}/api/reservations/${encodeURIComponent(id)}/status`,
         {
           method: "PATCH",
@@ -274,7 +275,7 @@ export default function PersetujuanKepalaLab() {
   const [submitting, setSubmitting] = useState(false);
 
   const refetchLoans = () => {
-    fetch(`${API_BASE}/api/loans?status=APPROVED_BY_DOSEN`, { credentials: "include" })
+    apiFetch(`${API_BASE}/api/loans?status=APPROVED_BY_DOSEN`, { credentials: "include" })
       .then(async (r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return (await r.json()) as LoanListResponse;
@@ -286,7 +287,7 @@ export default function PersetujuanKepalaLab() {
   const refetchClearances = () => {
     setClearancesLoading(true);
     setClearancesError(null);
-    fetch(`${API_BASE}/api/clearances?status=PENDING_KEPALA_LAB`, {
+    apiFetch(`${API_BASE}/api/clearances?status=PENDING_KEPALA_LAB`, {
       credentials: "include",
     })
       .then(async (r) => {
@@ -311,7 +312,7 @@ export default function PersetujuanKepalaLab() {
     let cancelled = false;
     setClearancesLoading(true);
     setClearancesError(null);
-    fetch(`${API_BASE}/api/clearances?status=PENDING_KEPALA_LAB`, {
+    apiFetch(`${API_BASE}/api/clearances?status=PENDING_KEPALA_LAB`, {
       credentials: "include",
     })
       .then(async (r) => {
@@ -409,7 +410,7 @@ export default function PersetujuanKepalaLab() {
 
     setSubmitting(true);
     try {
-      const res = await fetch(`${API_BASE}${endpoint}`, {
+      const res = await apiFetch(`${API_BASE}${endpoint}`, {
         method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

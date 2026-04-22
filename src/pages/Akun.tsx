@@ -10,24 +10,25 @@ import { Alert, AlertDescription } from "../components/ui/alert";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "../components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Checkbox } from "../components/ui/checkbox";
+import { apiFetch } from "../lib/apiFetch";
 
 type Peran =
   | "Super Admin"
-  | "Admin"
   | "Laboran"
   | "Dosen"
   | "Kepala Laboratorium"
-  | "Staff";
+  | "Staff"
+  | "Mahasiswa";
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
 
 type BackendRoleName =
   | "SUPER_ADMIN"
-  | "ADMIN"
   | "KEPALA_LAB"
   | "DOSEN"
   | "LABORAN"
-  | "STAFF";
+  | "STAFF"
+  | "MAHASISWA";
 
 interface BackendUser {
   id: string;
@@ -54,21 +55,21 @@ interface UserListResponse {
 
 const roleLabel: Record<BackendRoleName, Peran> = {
   SUPER_ADMIN: "Super Admin",
-  ADMIN: "Admin",
   KEPALA_LAB: "Kepala Laboratorium",
   DOSEN: "Dosen",
   LABORAN: "Laboran",
   STAFF: "Staff",
+  MAHASISWA: "Mahasiswa",
 };
 
 // Order untuk dropdown/checkbox — highest authority first.
 const ROLE_CHOICES: BackendRoleName[] = [
   "SUPER_ADMIN",
-  "ADMIN",
   "KEPALA_LAB",
   "DOSEN",
   "LABORAN",
   "STAFF",
+  "MAHASISWA",
 ];
 
 function formatDateShort(iso: string): string {
@@ -88,6 +89,7 @@ interface Account {
   backendId: string;    // UUID untuk API calls
   nama: string;
   email: string;
+  waNumber: string | null;
   peran: BackendRoleName[];
   status: "Aktif" | "Nonaktif";
   tanggalDibuat: string;
@@ -119,9 +121,9 @@ interface Role {
 }
 
 const mockImportData: ImportRow[] = [
-  { no: 1, nim: "21611050", email: "user1@students.uii.ac.id", peran: "Admin", valid: true },
+  { no: 1, nim: "21611050", email: "user1@students.uii.ac.id", peran: "Laboran", valid: true },
   { no: 2, nim: "21611051", email: "user2@students.uii.ac.id", peran: "Laboran", valid: true },
-  { no: 3, nim: "21611042", email: "duplicate@students.uii.ac.id", peran: "Admin", valid: false, error: "NIM duplikat" },
+  { no: 3, nim: "21611042", email: "duplicate@students.uii.ac.id", peran: "Dosen", valid: false, error: "NIM duplikat" },
   { no: 4, nim: "21611052", email: "user3@students.uii.ac.id", peran: "Dosen", valid: true },
   { no: 5, nim: "21611053", email: "user4@students.uii.ac.id", peran: "SuperUser", valid: false, error: "Peran tidak dikenal" }
 ];
@@ -138,20 +140,6 @@ const defaultRoles: Role[] = [
       "Habis Pakai": { lihat: true, tambah: true, edit: true, hapus: true },
       "Transaksi Habis Pakai": { lihat: true, tambah: true, edit: true, hapus: true },
       Akun: { lihat: true, tambah: true, edit: true, hapus: true },
-      "Pengaturan Aplikasi": { lihat: true, tambah: true, edit: true, hapus: true }
-    }
-  },
-  {
-    name: "Admin",
-    userCount: 2,
-    isBuiltIn: true,
-    permissions: {
-      Dashboard: { lihat: true, tambah: true, edit: true, hapus: true },
-      Transaksi: { lihat: true, tambah: true, edit: true, hapus: true },
-      Aset: { lihat: true, tambah: true, edit: true, hapus: true },
-      "Habis Pakai": { lihat: true, tambah: true, edit: true, hapus: true },
-      "Transaksi Habis Pakai": { lihat: true, tambah: true, edit: true, hapus: true },
-      Akun: { lihat: true, tambah: true, edit: true, hapus: false },
       "Pengaturan Aplikasi": { lihat: true, tambah: true, edit: true, hapus: true }
     }
   },
@@ -211,6 +199,7 @@ export default function Akun() {
     backendId: u.id,
     nama: u.displayName,
     email: u.email,
+    waNumber: u.waNumber,
     peran: u.roles.map((r) => r.role.name),
     status: u.isActive ? "Aktif" : "Nonaktif",
     tanggalDibuat: formatDateShort(u.createdAt),
@@ -220,7 +209,7 @@ export default function Akun() {
     setAccountsLoading(true);
     setAccountsError(null);
     try {
-      const r = await fetch(`${API_BASE}/api/users`, { credentials: "include" });
+      const r = await apiFetch(`${API_BASE}/api/users`, { credentials: "include" });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const data = (await r.json()) as UserListResponse;
       setAccounts(data.items.map(mapBackendUser));
@@ -248,6 +237,7 @@ export default function Akun() {
   const [formId, setFormId] = useState("");
   const [formNama, setFormNama] = useState("");
   const [formEmail, setFormEmail] = useState("");
+  const [formWa, setFormWa] = useState("");
   const [formPeran, setFormPeran] = useState<BackendRoleName[]>([]);
   const [submitting, setSubmitting] = useState(false);
   // Import Akun state
@@ -274,11 +264,11 @@ export default function Akun() {
 
   const peranColors: Record<Peran, string> = {
     "Super Admin": "bg-red-100 text-red-700",
-    Admin: "bg-orange-100 text-orange-700",
     Laboran: "bg-blue-100 text-blue-700",
     Dosen: "bg-indigo-100 text-indigo-700",
     "Kepala Laboratorium": "bg-purple-100 text-purple-700",
     Staff: "bg-gray-100 text-gray-700",
+    Mahasiswa: "bg-green-100 text-green-700",
   };
 
   const getPeranBadge = (peran: Peran) => (
@@ -308,7 +298,7 @@ export default function Akun() {
     if (!account) return;
     const nextActive = account.status === "Nonaktif";
     try {
-      const r = await fetch(
+      const r = await apiFetch(
         `${API_BASE}/api/users/${encodeURIComponent(account.backendId)}`,
         {
           method: "PATCH",
@@ -335,6 +325,7 @@ export default function Akun() {
     setFormId("");
     setFormNama("");
     setFormEmail("");
+    setFormWa("");
     setFormPeran([]);
     setAddModalOpen(true);
   };
@@ -349,7 +340,7 @@ export default function Akun() {
     if (submitting) return;
     setSubmitting(true);
     try {
-      const r = await fetch(`${API_BASE}/api/users`, {
+      const r = await apiFetch(`${API_BASE}/api/users`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -357,6 +348,7 @@ export default function Akun() {
           uid: formId.trim(),
           email: formEmail.trim(),
           displayName: formNama.trim(),
+          ...(formWa.trim() ? { waNumber: formWa.trim() } : {}),
           roles: formPeran,
         }),
       });
@@ -382,6 +374,7 @@ export default function Akun() {
     setFormId(account.id);
     setFormNama(account.nama);
     setFormEmail(account.email);
+    setFormWa(account.waNumber ?? "");
     setFormPeran(account.peran);
     setEditModalOpen(true);
   };
@@ -391,7 +384,7 @@ export default function Akun() {
     setSubmitting(true);
     try {
       // PATCH basic fields
-      const r1 = await fetch(
+      const r1 = await apiFetch(
         `${API_BASE}/api/users/${encodeURIComponent(selectedAccount.backendId)}`,
         {
           method: "PATCH",
@@ -400,6 +393,7 @@ export default function Akun() {
           body: JSON.stringify({
             displayName: formNama.trim(),
             email: formEmail.trim(),
+            waNumber: formWa.trim() ? formWa.trim() : null,
           }),
         },
       );
@@ -408,7 +402,7 @@ export default function Akun() {
         throw new Error(e?.message ?? `HTTP ${r1.status}`);
       }
       // PUT roles (replace)
-      const r2 = await fetch(
+      const r2 = await apiFetch(
         `${API_BASE}/api/users/${encodeURIComponent(selectedAccount.backendId)}/roles`,
         {
           method: "PUT",
@@ -449,7 +443,7 @@ export default function Akun() {
       return;
     }
     try {
-      const r = await fetch(
+      const r = await apiFetch(
         `${API_BASE}/api/users/${encodeURIComponent(account.backendId)}`,
         { method: "DELETE", credentials: "include" },
       );
@@ -525,7 +519,7 @@ export default function Akun() {
   const handleChangeRole = async () => {
     if (!searchedAccount) return;
     try {
-      const r = await fetch(
+      const r = await apiFetch(
         `${API_BASE}/api/users/${encodeURIComponent(searchedAccount.backendId)}/roles`,
         {
           method: "PUT",
@@ -754,7 +748,21 @@ export default function Akun() {
                       placeholder="email@uii.ac.id"
                     />
                   </div>
-                  
+
+                  <div>
+                    <Label htmlFor="wa">Nomor WhatsApp (opsional)</Label>
+                    <Input
+                      id="wa"
+                      inputMode="tel"
+                      value={formWa}
+                      onChange={(e) => setFormWa(e.target.value)}
+                      placeholder="628xxxxxxxxxx"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Format 62… atau 08…, min 6 digit. Kosongkan jika belum tahu — mahasiswa bisa isi sendiri saat login.
+                    </p>
+                  </div>
+
                   <div>
                     <Label>Peran (pilih satu atau lebih)</Label>
                     <div className="grid grid-cols-2 gap-2 mt-2 p-3 border rounded-md bg-gray-50">
@@ -826,7 +834,21 @@ export default function Akun() {
                       onChange={(e) => setFormEmail(e.target.value)}
                     />
                   </div>
-                  
+
+                  <div>
+                    <Label htmlFor="edit-wa">Nomor WhatsApp</Label>
+                    <Input
+                      id="edit-wa"
+                      inputMode="tel"
+                      value={formWa}
+                      onChange={(e) => setFormWa(e.target.value)}
+                      placeholder="628xxxxxxxxxx"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Kosongkan untuk menghapus nomor. Min 6 digit jika diisi.
+                    </p>
+                  </div>
+
                   <div>
                     <Label>Peran (pilih satu atau lebih)</Label>
                     <div className="grid grid-cols-2 gap-2 mt-2 p-3 border rounded-md bg-gray-50">

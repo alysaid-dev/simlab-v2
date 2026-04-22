@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { PageLayout } from "../components/PageLayout";
 import { ClipboardCheck, X, Construction, Loader2, AlertTriangle } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { apiFetch } from "../lib/apiFetch";
 
 type View = "peminjaman-ruangan" | "bebas-lab";
 
@@ -142,7 +143,7 @@ export default function PersetujuanLaboran() {
   const fetchClearances = () => {
     setClearancesLoading(true);
     setClearancesError(null);
-    return fetch(
+    return apiFetch(
       `${API_BASE}/api/clearances?status=PENDING_LABORAN`,
       { credentials: "include" },
     )
@@ -163,7 +164,7 @@ export default function PersetujuanLaboran() {
     let cancelled = false;
     setClearancesLoading(true);
     setClearancesError(null);
-    fetch(`${API_BASE}/api/clearances?status=PENDING_LABORAN`, {
+    apiFetch(`${API_BASE}/api/clearances?status=PENDING_LABORAN`, {
       credentials: "include",
     })
       .then(async (r) => {
@@ -200,7 +201,7 @@ export default function PersetujuanLaboran() {
   const fetchReservations = () => {
     setReservationsLoading(true);
     setReservationsError(null);
-    return fetch(`${API_BASE}/api/reservations?status=PENDING`, {
+    return apiFetch(`${API_BASE}/api/reservations?status=PENDING`, {
       credentials: "include",
     })
       .then(async (r) => {
@@ -223,7 +224,7 @@ export default function PersetujuanLaboran() {
     let cancelled = false;
     setReservationsLoading(true);
     setReservationsError(null);
-    fetch(`${API_BASE}/api/reservations?status=PENDING`, {
+    apiFetch(`${API_BASE}/api/reservations?status=PENDING`, {
       credentials: "include",
     })
       .then(async (r) => {
@@ -265,7 +266,7 @@ export default function PersetujuanLaboran() {
       return;
     const status = setuju ? "CHECKED" : "REJECTED";
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `${API_BASE}/api/reservations/${encodeURIComponent(id)}/status`,
         {
           method: "PATCH",
@@ -315,7 +316,7 @@ export default function PersetujuanLaboran() {
     }
     setSubmitting(true);
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `${API_BASE}/api/clearances/${encodeURIComponent(selectedRecord.id)}/status`,
         {
           method: "PATCH",

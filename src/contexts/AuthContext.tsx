@@ -4,11 +4,11 @@ const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
 
 export type RoleName =
   | "SUPER_ADMIN"
-  | "ADMIN"
   | "KEPALA_LAB"
   | "DOSEN"
   | "LABORAN"
-  | "STAFF";
+  | "STAFF"
+  | "MAHASISWA";
 
 export interface AuthUser {
   uid: string;

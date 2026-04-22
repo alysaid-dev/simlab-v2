@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Search, User, LogOut, SearchX } from "lucide-react";
 import logoImage from "@/assets/logo-statistika.png";
 import { useAuth } from "@/contexts/AuthContext";
+import { canAccess } from "@/lib/moduleAccess";
 import { DashboardCard } from "../components/DashboardCard";
 import {
   DropdownMenu,
@@ -18,7 +19,6 @@ interface ModuleTile {
   bgColor: string;
   icon: string;
   link: string;
-  requiresRole?: "SUPER_ADMIN";
 }
 
 const modules: ModuleTile[] = [
@@ -86,16 +86,9 @@ const modules: ModuleTile[] = [
     link: "/aset",
   },
   {
-    title: "Habis Pakai",
-    description: "Manajemen Barang Habis Pakai",
-    bgColor: "bg-gradient-to-br from-rose-600 to-red-500",
-    icon: "shoppingbag",
-    link: "/habis-pakai",
-  },
-  {
     title: "Transaksi Habis Pakai",
-    description: "Transaksi Barang Habis Pakai",
-    bgColor: "bg-gradient-to-br from-violet-600 to-purple-500",
+    description: "Daftar barang, pengeluaran & riwayat",
+    bgColor: "bg-gradient-to-br from-blue-500 to-cyan-400",
     icon: "receipt",
     link: "/transaksi-habis-pakai",
   },
@@ -119,7 +112,13 @@ const modules: ModuleTile[] = [
     bgColor: "bg-gradient-to-br from-red-600 to-orange-500",
     icon: "shield",
     link: "/monitor-transaksi",
-    requiresRole: "SUPER_ADMIN",
+  },
+  {
+    title: "History",
+    description: "Riwayat transaksi yang sudah selesai",
+    bgColor: "bg-gradient-to-br from-slate-700 to-slate-500",
+    icon: "history",
+    link: "/history",
   },
 ];
 
@@ -132,10 +131,7 @@ export default function Dashboard() {
     : user?.displayName || user?.email || user?.uid || "Tamu";
 
   const visibleModules = useMemo(() => {
-    const isSuperAdmin = user?.roles?.includes("SUPER_ADMIN") ?? false;
-    return modules.filter(
-      (m) => !m.requiresRole || (m.requiresRole === "SUPER_ADMIN" && isSuperAdmin),
-    );
+    return modules.filter((m) => canAccess(m.link, user?.roles));
   }, [user]);
 
   const filteredModules = useMemo(() => {

@@ -3,6 +3,7 @@ import { PageLayout } from "../components/PageLayout";
 import { ShieldCheck, Loader2, AlertTriangle, Ban } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Navigate } from "react-router";
+import { apiFetch } from "../lib/apiFetch";
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
 
@@ -96,7 +97,7 @@ export default function MonitorTransaksi() {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    fetch(`${API_BASE}/api/loans?take=200`, { credentials: "include" })
+    apiFetch(`${API_BASE}/api/loans?take=200`, { credentials: "include" })
       .then(async (r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return (await r.json()) as LoanListResponse;
@@ -136,7 +137,7 @@ export default function MonitorTransaksi() {
 
     setCancellingId(loan.id);
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `${API_BASE}/api/loans/${encodeURIComponent(loan.id)}/status`,
         {
           method: "PATCH",
