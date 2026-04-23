@@ -115,11 +115,18 @@ const modules: ModuleTile[] = [
     link: "/monitor-transaksi",
   },
   {
-    title: "History",
-    description: "Riwayat transaksi yang sudah selesai",
+    title: "Riwayat Saya",
+    description: "Peminjaman, reservasi, & surat saya",
     bgColor: "bg-gradient-to-br from-slate-700 to-slate-500",
     icon: "history",
     link: "/history",
+  },
+  {
+    title: "Transaksi Saya",
+    description: "Peminjaman laptop, alat, ruangan, & habis pakai",
+    bgColor: "bg-gradient-to-br from-indigo-600 to-blue-500",
+    icon: "receipt",
+    link: "/transaksi-saya",
   },
   {
     title: "Inventaris Lab",
@@ -127,6 +134,34 @@ const modules: ModuleTile[] = [
     bgColor: "bg-gradient-to-br from-teal-600 to-emerald-500",
     icon: "boxes",
     link: "/inventaris-lab",
+  },
+  {
+    title: "Petunjuk Mahasiswa",
+    description: "Panduan penggunaan SIMLAB untuk mahasiswa",
+    bgColor: "bg-gradient-to-br from-blue-500 to-indigo-500",
+    icon: "bookopen",
+    link: "/petunjuk-mahasiswa",
+  },
+  {
+    title: "Petunjuk Dosen",
+    description: "Panduan penggunaan SIMLAB untuk dosen",
+    bgColor: "bg-gradient-to-br from-violet-600 to-purple-500",
+    icon: "bookopen",
+    link: "/petunjuk-dosen",
+  },
+  {
+    title: "Petunjuk Tendik",
+    description: "Panduan penggunaan SIMLAB untuk tendik",
+    bgColor: "bg-gradient-to-br from-amber-500 to-yellow-500",
+    icon: "bookopen",
+    link: "/petunjuk-tendik",
+  },
+  {
+    title: "Manajemen Petunjuk",
+    description: "Kelola konten petunjuk per audience",
+    bgColor: "bg-gradient-to-br from-slate-700 to-zinc-600",
+    icon: "notebook",
+    link: "/manajemen-petunjuk",
   },
 ];
 
@@ -139,7 +174,22 @@ export default function Dashboard() {
     : user?.displayName || user?.email || user?.uid || "Tamu";
 
   const visibleModules = useMemo(() => {
-    return modules.filter((m) => canAccess(m.link, user?.roles));
+    const isKepalaLab = user?.roles?.includes("KEPALA_LAB") ?? false;
+    return modules
+      .filter((m) => canAccess(m.link, user?.roles))
+      .map((m) => {
+        // KEPALA_LAB lihat /history sebagai view global lab (backend
+        // treat unscoped) — rename card biar tidak rancu dengan "Riwayat
+        // Saya" milik mahasiswa.
+        if (m.link === "/history" && isKepalaLab) {
+          return {
+            ...m,
+            title: "Riwayat Lab",
+            description: "Riwayat transaksi di laboratorium",
+          };
+        }
+        return m;
+      });
   }, [user]);
 
   const filteredModules = useMemo(() => {

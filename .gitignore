@@ -137,4 +137,8 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
-.claude/worktrees/ 
+.claude/worktrees/
+
+# SIMLAB runtime upload directories (per-instance user data — not source)
+backend/uploads/
+

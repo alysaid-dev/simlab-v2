@@ -144,6 +144,9 @@ model User {
   roomReservationApprovals RoomReservation[]       @relation("ReservationApprover")
   digitalSignatures        DigitalSignature[]
   activityLogs             ActivityLog[]
+  guidesUpdated            Guide[]                 @relation("GuideUpdatedBy")
+  guideRevisionsAuthored   GuideSectionRevision[]  @relation("GuideRevisionUpdatedBy")
+  guideImagesUploaded      GuideImage[]            @relation("GuideImageUploadedBy")
 
   @@index([email])
   @@index([uid])
@@ -532,4 +535,64 @@ model AppSettings {
   updatedAt            DateTime @updatedAt @map("updated_at")
 
   @@map("app_settings")
+}
+
+// ============================================================================
+// GUIDES — petunjuk penggunaan per role (CMS ringan; markdown + gambar)
+// ============================================================================
+
+enum GuideAudience {
+  MAHASISWA
+  DOSEN
+  STAFF
+}
+
+model Guide {
+  id          String        @id @default(uuid()) @db.Uuid
+  audience    GuideAudience
+  slug        String
+  title       String
+  contentMd   String        @default("") @map("content_md") @db.Text
+  order       Int           @default(0)
+  isPublished Boolean       @default(false) @map("is_published")
+  updatedById String?       @map("updated_by_id") @db.Uuid
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  updatedBy User?                  @relation("GuideUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  revisions GuideSectionRevision[]
+
+  @@unique([audience, slug])
+  @@index([audience])
+  @@index([order])
+  @@map("guides")
+}
+
+model GuideSectionRevision {
+  id          String   @id @default(uuid()) @db.Uuid
+  guideId     String   @map("guide_id") @db.Uuid
+  contentMd   String   @map("content_md") @db.Text
+  updatedById String?  @map("updated_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  guide     Guide @relation(fields: [guideId], references: [id], onDelete: Cascade)
+  updatedBy User? @relation("GuideRevisionUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([guideId])
+  @@index([createdAt])
+  @@map("guide_section_revisions")
+}
+
+model GuideImage {
+  id           String   @id @default(uuid()) @db.Uuid
+  filename     String   @unique
+  path         String
+  mimeType     String   @map("mime_type")
+  sizeBytes    Int      @map("size_bytes")
+  uploadedById String?  @map("uploaded_by_id") @db.Uuid
+  uploadedAt   DateTime @default(now()) @map("uploaded_at")
+
+  uploadedBy User? @relation("GuideImageUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@map("guide_images")
 }

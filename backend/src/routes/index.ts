@@ -14,6 +14,7 @@ import appSettingsRoutes from "./appSettings.routes.js";
 import laboratoriesRoutes from "./laboratories.routes.js";
 import meRoutes from "./me.routes.js";
 import verifyRoutes from "./verify.routes.js";
+import guidesRoutes from "./guides.routes.js";
 
 const router = Router();
 
@@ -35,6 +36,7 @@ router.use("/history", historyRoutes);
 router.use("/app-settings", appSettingsRoutes);
 router.use("/laboratories", laboratoriesRoutes);
 router.use("/me", meRoutes);
+router.use("/guides", guidesRoutes);
 // PUBLIC endpoint — QR verification. Must stay OUTSIDE any auth guard.
 router.use("/verify", verifyRoutes);
 

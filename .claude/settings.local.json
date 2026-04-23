@@ -122,7 +122,18 @@
       "Bash(grep -nA 15 \"^\\\\s*get:\\\\s*async\\\\|get:\\\\s*asyncHandler\" backend/src/controllers/appSettings.controller.ts)",
       "Bash(grep -nA 10 \"^\\\\s*list:\\\\s*async\\\\|list:\\\\s*asyncHandler\" backend/src/controllers/assets.controller.ts)",
       "Bash(grep -nA 25 \"replaceRoles:\\\\s*async\\\\|replaceRoles:\\\\s*asyncHandler\" backend/src/controllers/users.controller.ts)",
-      "Bash(grep *)"
+      "Bash(grep *)",
+      "Read(//etc/sudoers.d/**)",
+      "Bash(sudo -n systemctl status simlab-v2-be)",
+      "Bash(sudo -n systemctl is-active simlab-v2-be)",
+      "Bash(sudo -n -l)",
+      "Bash(sudo -n systemctl status simlab-v2-be --no-pager)",
+      "Bash(sudo -n /usr/bin/systemctl restart simlab-v2-be)",
+      "Bash(sudo -n /usr/bin/systemctl status simlab-v2-be --no-pager)",
+      "Bash(echo \"restart exit=$?\")",
+      "Bash(sudo -n /usr/bin/journalctl -u simlab-v2-be -n 15 --no-pager)",
+      "Bash(sudo -n /usr/bin/journalctl -u simlab-v2-be --no-pager -n 0)",
+      "Bash(sudo -n /usr/bin/journalctl -u simlab-v2-be -n 8 --no-pager)"
     ]
   }
 }
