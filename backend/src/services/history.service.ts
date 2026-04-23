@@ -56,14 +56,48 @@ export interface TimelineEvent {
   note?: string | null;
 }
 
+/**
+ * Scope "Riwayat Saya" — ditentukan di controller dari req.user.
+ * - isAdmin = SUPER_ADMIN → bypass semua filter.
+ * - isLaboran = role LABORAN → include record yang dia tangani (handover/return/
+ *   laboran-signer/checker/pencatat).
+ * - Lainnya → hanya record yang dia ajukan (borrower / userId).
+ * userId = User.id (UUID); userUid = Shibboleth uid (string, untuk kolom
+ * clearance.signerUid*).
+ */
+export interface HistoryScope {
+  isAdmin: boolean;
+  isLaboran: boolean;
+  userId: string;
+  userUid: string;
+}
+
 export const historyService = {
   // ---------------------------- Loans ----------------------------
-  async listLoans(params: { type: LoanType; skip?: number; take?: number }) {
-    const { type, skip = 0, take = 50 } = params;
+  async listLoans(params: {
+    type: LoanType;
+    skip?: number;
+    take?: number;
+    scope: HistoryScope;
+  }) {
+    const { type, skip = 0, take = 50, scope } = params;
     const where: Prisma.LoanWhereInput = {
       type,
       status: { in: LOAN_FINAL_STATUSES },
     };
+    if (!scope.isAdmin) {
+      const ors: Prisma.LoanWhereInput[] = [
+        { userId: scope.userId },
+        { lecturerId: scope.userId },
+      ];
+      if (scope.isLaboran) {
+        ors.push(
+          { laboranHandoverBy: scope.userId },
+          { laboranReturnBy: scope.userId },
+        );
+      }
+      where.OR = ors;
+    }
     const [items, total] = await Promise.all([
       prisma.loan.findMany({
         where,
@@ -77,7 +111,10 @@ export const historyService = {
     return { items, total, skip, take };
   },
 
-  async loanTimeline(id: string): Promise<{
+  async loanTimeline(
+    id: string,
+    scope: HistoryScope,
+  ): Promise<{
     loan: Awaited<ReturnType<typeof prisma.loan.findUniqueOrThrow>>;
     events: TimelineEvent[];
   }> {
@@ -86,6 +123,16 @@ export const historyService = {
       include: LOAN_HISTORY_INCLUDE,
     });
     if (!loan) throw new HttpError(404, "Peminjaman tidak ditemukan");
+    if (!scope.isAdmin) {
+      const owns =
+        loan.userId === scope.userId ||
+        loan.lecturerId === scope.userId ||
+        (scope.isLaboran &&
+          (loan.laboranHandoverBy === scope.userId ||
+            loan.laboranReturnBy === scope.userId));
+      // 404 (bukan 403) agar tidak bocorkan keberadaan record.
+      if (!owns) throw new HttpError(404, "Peminjaman tidak ditemukan");
+    }
 
     const events: TimelineEvent[] = [];
     events.push({
@@ -169,11 +216,24 @@ export const historyService = {
   },
 
   // -------------------------- Clearances -------------------------
-  async listClearances(params: { skip?: number; take?: number }) {
-    const { skip = 0, take = 50 } = params;
+  async listClearances(params: {
+    skip?: number;
+    take?: number;
+    scope: HistoryScope;
+  }) {
+    const { skip = 0, take = 50, scope } = params;
     const where: Prisma.ClearanceLetterWhereInput = {
       status: { in: CLEARANCE_FINAL_STATUSES },
     };
+    if (!scope.isAdmin) {
+      const ors: Prisma.ClearanceLetterWhereInput[] = [
+        { userId: scope.userId },
+      ];
+      if (scope.isLaboran) {
+        ors.push({ signerUidLaboran: scope.userUid });
+      }
+      where.OR = ors;
+    }
     const [items, total] = await Promise.all([
       prisma.clearanceLetter.findMany({
         where,
@@ -187,12 +247,18 @@ export const historyService = {
     return { items, total, skip, take };
   },
 
-  async clearanceTimeline(id: string) {
+  async clearanceTimeline(id: string, scope: HistoryScope) {
     const letter = await prisma.clearanceLetter.findUnique({
       where: { id },
       include: CLEARANCE_HISTORY_INCLUDE,
     });
     if (!letter) throw new HttpError(404, "Surat tidak ditemukan");
+    if (!scope.isAdmin) {
+      const owns =
+        letter.userId === scope.userId ||
+        (scope.isLaboran && letter.signerUidLaboran === scope.userUid);
+      if (!owns) throw new HttpError(404, "Surat tidak ditemukan");
+    }
 
     // Resolve signer names dari UID — letter hanya simpan UID.
     const [laboranUser, kalabUser] = await Promise.all([
@@ -248,11 +314,24 @@ export const historyService = {
   },
 
   // -------------------------- Reservations -----------------------
-  async listReservations(params: { skip?: number; take?: number }) {
-    const { skip = 0, take = 50 } = params;
+  async listReservations(params: {
+    skip?: number;
+    take?: number;
+    scope: HistoryScope;
+  }) {
+    const { skip = 0, take = 50, scope } = params;
     const where: Prisma.RoomReservationWhereInput = {
       status: { in: RESERVATION_FINAL_STATUSES },
     };
+    if (!scope.isAdmin) {
+      const ors: Prisma.RoomReservationWhereInput[] = [
+        { userId: scope.userId },
+      ];
+      if (scope.isLaboran) {
+        ors.push({ checkedBy: scope.userId });
+      }
+      where.OR = ors;
+    }
     const [items, total] = await Promise.all([
       prisma.roomReservation.findMany({
         where,
@@ -266,12 +345,18 @@ export const historyService = {
     return { items, total, skip, take };
   },
 
-  async reservationTimeline(id: string) {
+  async reservationTimeline(id: string, scope: HistoryScope) {
     const reservation = await prisma.roomReservation.findUnique({
       where: { id },
       include: RESERVATION_HISTORY_INCLUDE,
     });
     if (!reservation) throw new HttpError(404, "Reservasi tidak ditemukan");
+    if (!scope.isAdmin) {
+      const owns =
+        reservation.userId === scope.userId ||
+        (scope.isLaboran && reservation.checkedBy === scope.userId);
+      if (!owns) throw new HttpError(404, "Reservasi tidak ditemukan");
+    }
 
     const events: TimelineEvent[] = [];
     events.push({
@@ -322,13 +407,28 @@ export const historyService = {
   // mahasiswa di-parse oleh frontend dari field `notes` ("Diambil oleh
   // NAME (NIM)"). Rincian barang disertakan langsung di response supaya
   // frontend tidak perlu request endpoint detail terpisah.
-  async listConsumableOutgoing(params: { skip?: number; take?: number }) {
-    const { skip = 0, take = 100 } = params;
+  async listConsumableOutgoing(params: {
+    skip?: number;
+    take?: number;
+    scope: HistoryScope;
+  }) {
+    const { skip = 0, take = 100, scope } = params;
+    // Tab ini hanya bermakna untuk LABORAN (pencatat) & SUPER_ADMIN.
+    // MAHASISWA/DOSEN/STAFF bukan pencatat → kembalikan empty.
+    if (!scope.isAdmin && !scope.isLaboran) {
+      return { items: [], total: 0, skip, take };
+    }
+    const where: Prisma.ConsumableTransactionWhereInput = {
+      type: ConsumableTransactionType.OUT,
+    };
+    if (!scope.isAdmin) {
+      where.userId = scope.userId;
+    }
     // Tarik banyak row dulu (cap 1000), group-kan, lalu slice sesuai
     // skip/take pada level bucket. Lab skala kecil-menengah → count ribuan
     // row per hari sangat tidak mungkin, jadi ini cukup.
     const rows = await prisma.consumableTransaction.findMany({
-      where: { type: ConsumableTransactionType.OUT },
+      where,
       orderBy: { createdAt: "desc" },
       take: 1000,
       include: {

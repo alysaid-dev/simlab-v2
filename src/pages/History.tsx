@@ -2,19 +2,22 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { History as HistoryIcon, X } from "lucide-react";
 import { PageLayout } from "../components/PageLayout";
 import { apiFetch } from "../lib/apiFetch";
+import { useAuth } from "../contexts/AuthContext";
 import { formatDateTime } from "../lib/format";
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
 
 type ViewKey = "ta" | "practicum" | "clearance" | "reservation" | "consumables";
 
-const SIDEBAR_ITEMS = [
+// Tab "Barang Keluar" hanya relevan untuk LABORAN (pencatat) & SUPER_ADMIN
+// — role lain bukan pencatat, datanya pasti kosong → tab disembunyikan.
+const BASE_SIDEBAR_ITEMS = [
   "Laptop TA",
   "Laptop Praktikum",
   "Surat Bebas Lab",
   "Peminjaman Ruang",
-  "Barang Keluar",
 ];
+const LABORAN_SIDEBAR_ITEMS = [...BASE_SIDEBAR_ITEMS, "Barang Keluar"];
 
 const VIEW_BY_LABEL: Record<string, ViewKey> = {
   "Laptop TA": "ta",
@@ -134,7 +137,22 @@ function normalizeRow(view: ViewKey, item: Record<string, unknown>): Row {
 }
 
 export default function History() {
-  const [activeLabel, setActiveLabel] = useState<string>(SIDEBAR_ITEMS[0]!);
+  const { user } = useAuth();
+  const canSeeConsumables =
+    user?.roles?.includes("LABORAN") ||
+    user?.roles?.includes("KEPALA_LAB") ||
+    user?.roles?.includes("SUPER_ADMIN") ||
+    false;
+  // KEPALA_LAB lihat view global (unscoped di backend) — nama halaman
+  // "Riwayat Lab" supaya konsisten dengan card dashboard-nya.
+  const pageName = user?.roles?.includes("KEPALA_LAB")
+    ? "Riwayat Lab"
+    : "Riwayat Saya";
+  const sidebarItems = canSeeConsumables
+    ? LABORAN_SIDEBAR_ITEMS
+    : BASE_SIDEBAR_ITEMS;
+
+  const [activeLabel, setActiveLabel] = useState<string>(sidebarItems[0]!);
   const view: ViewKey = VIEW_BY_LABEL[activeLabel]!;
 
   const [rows, setRows] = useState<Row[]>([]);
@@ -238,10 +256,10 @@ export default function History() {
 
   return (
     <PageLayout
-      title={`History — ${activeLabel}`}
-      breadcrumbs={[{ label: "History" }]}
+      title={`${pageName} — ${activeLabel}`}
+      breadcrumbs={[{ label: pageName }]}
       icon={<HistoryIcon className="w-6 h-6 text-white" />}
-      sidebarItems={SIDEBAR_ITEMS}
+      sidebarItems={sidebarItems}
       activeItem={activeLabel}
       onSidebarItemClick={(item) => setActiveLabel(item)}
     >

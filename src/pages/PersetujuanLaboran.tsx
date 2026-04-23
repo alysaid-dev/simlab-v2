@@ -43,6 +43,7 @@ interface BackendClearance {
   userId: string;
   status: BackendClearanceStatus;
   notes: string | null;
+  tanggalSidang: string | null;
   createdAt: string;
   updatedAt: string;
   user?: { id: string; displayName: string; uid: string; email?: string };
@@ -291,7 +292,7 @@ export default function PersetujuanLaboran() {
     namaMahasiswa: c.user?.displayName ?? "-",
     nim: c.user?.uid ?? "-",
     email: c.user?.email ?? "-",
-    tanggalSidang: "-", // tidak tersimpan di model
+    tanggalSidang: c.tanggalSidang ? formatDateFull(c.tanggalSidang) : "-",
   }));
 
   const handleDetailClick = (record: any) => {

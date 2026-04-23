@@ -1,12 +1,14 @@
 import { Router } from "express";
 import { historyController } from "../controllers/history.controller.js";
-import { requireAuth, requireRole } from "../middleware/auth.js";
+import { requireAuth } from "../middleware/auth.js";
 
 const router = Router();
 
-// Seluruh modul History hanya untuk Kepala Lab & Super Admin.
+// Akses: semua user terautentikasi. Scoping per-role ditangani di
+// controller/service — MAHASISWA/DOSEN/STAFF/LABORAN hanya melihat
+// riwayat miliknya; LABORAN ditambah record yang dia handle;
+// SUPER_ADMIN melihat semua.
 router.use(requireAuth);
-router.use(requireRole("KEPALA_LAB", "SUPER_ADMIN"));
 
 router.get("/loans/ta", historyController.listLoansTA);
 router.get("/loans/practicum", historyController.listLoansPracticum);

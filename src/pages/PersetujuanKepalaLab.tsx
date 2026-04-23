@@ -266,6 +266,7 @@ export default function PersetujuanKepalaLab() {
     id: string;
     status: BackendClearanceStatus;
     notes: string | null;
+    tanggalSidang: string | null;
     createdAt: string;
     user?: { id: string; displayName: string; uid: string; email?: string };
   }
@@ -375,7 +376,7 @@ export default function PersetujuanKepalaLab() {
     namaMahasiswa: c.user?.displayName ?? "-",
     nim: c.user?.uid ?? "-",
     email: c.user?.email ?? "-",
-    tanggalSidang: "-",
+    tanggalSidang: c.tanggalSidang ? formatDateFull(c.tanggalSidang) : "-",
   }));
 
   const handleDetailClick = (record: any) => {
