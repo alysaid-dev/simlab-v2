@@ -1579,3 +1579,261 @@ Mohon kembalikan atau perpanjang kembali paling lambat tanggal baru di atas.
   return { subject, html, whatsapp };
 }
 
+// ---------------------------------------------------------------------------
+// Mahasiswa/pengguna — pengajuan peminjaman ruangan berhasil dibuat
+// ---------------------------------------------------------------------------
+export interface RoomReservationCreatedToMahasiswaParams {
+  namaPemohon: string;
+  nomorInduk: string;
+  ruangan: string;
+  tanggalPinjam: string;
+  waktuPinjam: string;
+  linkSimlab?: string;
+}
+
+export function roomReservationCreatedToMahasiswa(
+  p0: RoomReservationCreatedToMahasiswaParams,
+): NotificationTemplate {
+  const link = p0.linkSimlab ?? SIMLAB_URL;
+  const subject = '[SIMLAB] Pengajuan Peminjaman Ruangan Berhasil Dibuat';
+  const html = emailLayout({
+    greeting: `Yth. ${p0.namaPemohon}`,
+    bodyHtml:
+      p('Pengajuan peminjaman ruangan laboratorium Anda telah berhasil dibuat melalui SIMLAB. Berikut detail pengajuan Anda:') +
+      detailTable([
+        ['Nama Pemohon', p0.namaPemohon],
+        ['Nomor Induk', p0.nomorInduk],
+        ['Ruangan', p0.ruangan],
+        ['Tanggal Pinjam', p0.tanggalPinjam],
+        ['Waktu Pinjam', p0.waktuPinjam],
+      ]) +
+      p('Pengajuan Anda saat ini sedang menunggu pemeriksaan oleh laboran, kemudian akan diteruskan ke Kepala Laboratorium untuk persetujuan. Anda dapat memantau status melalui tautan berikut:'),
+    linkSimlab: link,
+    linkLabel: 'Pantau Pengajuan',
+  });
+  const whatsapp = `${WA_SALAM}
+
+*Pengajuan Peminjaman Ruangan Dibuat*
+
+Yth. ${p0.namaPemohon},
+Pengajuan peminjaman ruangan Anda berhasil dibuat dan menunggu pemeriksaan laboran.
+
+${waDetails([
+  ['👤 Pemohon', p0.namaPemohon],
+  ['🆔 No. Induk', p0.nomorInduk],
+  ['🚪 Ruangan', p0.ruangan],
+  ['📅 Tgl Pinjam', p0.tanggalPinjam],
+  ['🕒 Waktu', p0.waktuPinjam],
+])}
+
+🔗 ${link}${WA_FOOTER}`;
+  return { subject, html, whatsapp };
+}
+
+// ---------------------------------------------------------------------------
+// Mahasiswa/pengguna — pengajuan ruangan telah diperiksa laboran
+// ---------------------------------------------------------------------------
+export interface RoomReservationCheckedToMahasiswaParams {
+  namaPemohon: string;
+  nomorInduk: string;
+  ruangan: string;
+  tanggalPinjam: string;
+  waktuPinjam: string;
+  diperiksaOleh: string;
+  linkSimlab?: string;
+}
+
+export function roomReservationCheckedToMahasiswa(
+  p0: RoomReservationCheckedToMahasiswaParams,
+): NotificationTemplate {
+  const link = p0.linkSimlab ?? SIMLAB_URL;
+  const subject = '[SIMLAB] Pengajuan Peminjaman Ruangan Telah Diperiksa Laboran';
+  const html = emailLayout({
+    greeting: `Yth. ${p0.namaPemohon}`,
+    bodyHtml:
+      p('Pengajuan peminjaman ruangan Anda telah selesai diperiksa oleh laboran. Berikut detail pengajuan Anda:') +
+      detailTable([
+        ['Nama Pemohon', p0.namaPemohon],
+        ['Nomor Induk', p0.nomorInduk],
+        ['Ruangan', p0.ruangan],
+        ['Tanggal Pinjam', p0.tanggalPinjam],
+        ['Waktu Pinjam', p0.waktuPinjam],
+        ['Diperiksa Oleh', p0.diperiksaOleh],
+      ]) +
+      p('Pengajuan Anda saat ini menunggu persetujuan oleh Kepala Laboratorium. Anda dapat memantau status melalui tautan berikut:'),
+    linkSimlab: link,
+    linkLabel: 'Pantau Pengajuan',
+  });
+  const whatsapp = `${WA_SALAM}
+
+*Pengajuan Ruangan Telah Diperiksa*
+
+Yth. ${p0.namaPemohon},
+Pengajuan peminjaman ruangan Anda telah diperiksa laboran dan menunggu persetujuan Kepala Lab.
+
+${waDetails([
+  ['👤 Pemohon', p0.namaPemohon],
+  ['🆔 No. Induk', p0.nomorInduk],
+  ['🚪 Ruangan', p0.ruangan],
+  ['📅 Tgl Pinjam', p0.tanggalPinjam],
+  ['🕒 Waktu', p0.waktuPinjam],
+  ['🔍 Diperiksa Oleh', p0.diperiksaOleh],
+])}
+
+🔗 ${link}${WA_FOOTER}`;
+  return { subject, html, whatsapp };
+}
+
+// ---------------------------------------------------------------------------
+// Mahasiswa/pengguna — pengajuan ruangan disetujui/ditolak Kalab
+// ---------------------------------------------------------------------------
+export interface RoomReservationDecisionToMahasiswaParams {
+  namaPemohon: string;
+  nomorInduk: string;
+  ruangan: string;
+  tanggalPinjam: string;
+  waktuPinjam: string;
+  diprosesOleh: string;
+  waktuKeputusan: string;
+  /** Default true. Saat false, template pakai copy penolakan. */
+  approved?: boolean;
+  /** Alasan penolakan — hanya dipakai kalau approved=false. */
+  alasan?: string;
+  linkSimlab?: string;
+}
+
+export function roomReservationDecisionToMahasiswa(
+  p0: RoomReservationDecisionToMahasiswaParams,
+): NotificationTemplate {
+  const link = p0.linkSimlab ?? SIMLAB_URL;
+  const isApproved = p0.approved !== false;
+
+  if (!isApproved) {
+    const subject = '[SIMLAB] Pengajuan Peminjaman Ruangan Ditolak';
+    const html = emailLayout({
+      greeting: `Yth. ${p0.namaPemohon}`,
+      bodyHtml:
+        p('Mohon maaf, pengajuan peminjaman ruangan Anda telah <strong>ditolak</strong>. Berikut detail pengajuan Anda:') +
+        detailTable([
+          ['Ruangan', p0.ruangan],
+          ['Tanggal Pinjam', p0.tanggalPinjam],
+          ['Waktu Pinjam', p0.waktuPinjam],
+          ['Ditolak Oleh', `${p0.diprosesOleh} pada ${p0.waktuKeputusan}`],
+          ...(p0.alasan ? ([['Alasan', p0.alasan]] as Array<[string, string]>) : []),
+        ]) +
+        p('Silakan menghubungi Laboratorium untuk klarifikasi, atau ajukan kembali jika diperlukan.'),
+      linkSimlab: link,
+      linkLabel: 'Buka SIMLAB',
+    });
+    const whatsapp = `${WA_SALAM}
+
+*Pengajuan Ruangan Ditolak*
+
+Yth. ${p0.namaPemohon},
+Mohon maaf, pengajuan peminjaman ruangan Anda *ditolak*.
+
+${waDetails([
+  ['🚪 Ruangan', p0.ruangan],
+  ['📅 Tgl Pinjam', p0.tanggalPinjam],
+  ['🕒 Waktu', p0.waktuPinjam],
+  ['❌ Ditolak Oleh', `${p0.diprosesOleh} pada ${p0.waktuKeputusan}`],
+  ...(p0.alasan ? ([['📝 Alasan', p0.alasan]] as Array<[string, string]>) : []),
+])}
+
+Silakan hubungi Laboratorium untuk klarifikasi.
+🔗 ${link}${WA_FOOTER}`;
+    return { subject, html, whatsapp };
+  }
+
+  const subject = '[SIMLAB] Pengajuan Peminjaman Ruangan Disetujui';
+  const html = emailLayout({
+    greeting: `Yth. ${p0.namaPemohon}`,
+    bodyHtml:
+      p('Pengajuan peminjaman ruangan Anda telah <strong>disetujui</strong> oleh Kepala Laboratorium. Berikut detail pengajuan Anda:') +
+      detailTable([
+        ['Nama Pemohon', p0.namaPemohon],
+        ['Nomor Induk', p0.nomorInduk],
+        ['Ruangan', p0.ruangan],
+        ['Tanggal Pinjam', p0.tanggalPinjam],
+        ['Waktu Pinjam', p0.waktuPinjam],
+        ['Disetujui Oleh', `${p0.diprosesOleh} pada ${p0.waktuKeputusan}`],
+      ]) +
+      p('Silakan datang ke laboratorium sesuai jadwal di atas. Laboran akan mempersiapkan ruangan untuk Anda.'),
+    linkSimlab: link,
+    linkLabel: 'Lihat Detail',
+  });
+  const whatsapp = `${WA_SALAM}
+
+*Pengajuan Ruangan Disetujui*
+
+Yth. ${p0.namaPemohon},
+Pengajuan peminjaman ruangan Anda telah disetujui Kepala Lab.
+
+${waDetails([
+  ['🚪 Ruangan', p0.ruangan],
+  ['📅 Tgl Pinjam', p0.tanggalPinjam],
+  ['🕒 Waktu', p0.waktuPinjam],
+  ['✅ Disetujui Oleh', `${p0.diprosesOleh} pada ${p0.waktuKeputusan}`],
+])}
+
+Silakan datang sesuai jadwal. Laboran akan menyiapkan ruangan.
+🔗 ${link}${WA_FOOTER}`;
+  return { subject, html, whatsapp };
+}
+
+// ---------------------------------------------------------------------------
+// Laboran — pengajuan ruangan disetujui Kalab, mohon siapkan ruangan
+// ---------------------------------------------------------------------------
+export interface RoomReservationApprovedToLaboranParams {
+  laboranName: string;
+  namaPemohon: string;
+  nomorInduk: string;
+  ruangan: string;
+  tanggalPinjam: string;
+  waktuPinjam: string;
+  disetujuiOleh: string;
+  linkSimlab?: string;
+}
+
+export function roomReservationApprovedToLaboran(
+  p0: RoomReservationApprovedToLaboranParams,
+): NotificationTemplate {
+  const link = p0.linkSimlab ?? SIMLAB_URL;
+  const subject = '[SIMLAB] Pengajuan Ruangan Disetujui — Mohon Siapkan Ruangan & Jadwal';
+  const html = emailLayout({
+    greeting: `Yth. Bapak/Ibu ${p0.laboranName}`,
+    bodyHtml:
+      p('Pengajuan peminjaman ruangan berikut telah disetujui oleh Kepala Laboratorium dan perlu segera disiapkan:') +
+      detailTable([
+        ['Nama Pemohon', p0.namaPemohon],
+        ['Nomor Induk', p0.nomorInduk],
+        ['Ruangan', p0.ruangan],
+        ['Tanggal Pinjam', p0.tanggalPinjam],
+        ['Waktu Pinjam', p0.waktuPinjam],
+        ['Disetujui Oleh', p0.disetujuiOleh],
+      ]) +
+      p('Mohon Bapak/Ibu mempersiapkan ruangan dan penjadwalan sesuai detail di atas. Detail selengkapnya dapat dilihat melalui tautan berikut:'),
+    linkSimlab: link,
+    linkLabel: 'Lihat Detail',
+  });
+  const whatsapp = `${WA_SALAM}
+
+*Pengajuan Ruangan Disetujui — Siapkan Ruangan*
+
+Yth. Bapak/Ibu ${p0.laboranName},
+Pengajuan peminjaman ruangan berikut telah disetujui Kepala Lab dan perlu disiapkan.
+
+${waDetails([
+  ['👤 Pemohon', p0.namaPemohon],
+  ['🆔 No. Induk', p0.nomorInduk],
+  ['🚪 Ruangan', p0.ruangan],
+  ['📅 Tgl Pinjam', p0.tanggalPinjam],
+  ['🕒 Waktu', p0.waktuPinjam],
+  ['✅ Disetujui Oleh', p0.disetujuiOleh],
+])}
+
+Mohon menyiapkan ruangan dan penjadwalan sesuai jadwal.
+🔗 ${link}${WA_FOOTER}`;
+  return { subject, html, whatsapp };
+}
+

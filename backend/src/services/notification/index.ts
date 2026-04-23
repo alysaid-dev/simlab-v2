@@ -311,3 +311,31 @@ export async function notifyEquipmentLoanExtendedToMahasiswa(
 ): Promise<ChannelResults> {
   return dispatch(recipient, t.equipmentLoanExtendedToMahasiswa(params));
 }
+
+export async function notifyRoomReservationCreatedToMahasiswa(
+  recipient: Recipient,
+  params: t.RoomReservationCreatedToMahasiswaParams,
+): Promise<ChannelResults> {
+  return dispatch(recipient, t.roomReservationCreatedToMahasiswa(params));
+}
+
+export async function notifyRoomReservationCheckedToMahasiswa(
+  recipient: Recipient,
+  params: t.RoomReservationCheckedToMahasiswaParams,
+): Promise<ChannelResults> {
+  return dispatch(recipient, t.roomReservationCheckedToMahasiswa(params));
+}
+
+export async function notifyRoomReservationDecisionToMahasiswa(
+  recipient: Recipient,
+  params: t.RoomReservationDecisionToMahasiswaParams,
+): Promise<ChannelResults> {
+  return dispatch(recipient, t.roomReservationDecisionToMahasiswa(params));
+}
+
+export async function notifyRoomReservationApprovedToLaboran(
+  recipient: Recipient,
+  params: t.RoomReservationApprovedToLaboranParams,
+): Promise<ChannelResults> {
+  return dispatch(recipient, t.roomReservationApprovedToLaboran(params));
+}

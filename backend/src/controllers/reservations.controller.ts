@@ -5,11 +5,11 @@ import multer from "multer";
 import { z } from "zod";
 import { prisma } from "../config/database.js";
 import { reservationsService } from "../services/reservations.service.js";
-import { roomsService } from "../services/rooms.service.js";
 import { usersService } from "../services/users.service.js";
 import { hasAnyRole } from "../middleware/auth.js";
 import { HttpError } from "../middleware/errorHandler.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
+import { fmtDateTime } from "../utils/format.js";
 
 // ---------------------------------------------------------------------------
 // Multer: upload surat permohonan (PDF, max 200KB)
@@ -40,9 +40,33 @@ export const reservationUpload = multer({
   },
 });
 import {
+  notifyRoomReservationApprovedToLaboran,
+  notifyRoomReservationCheckedToMahasiswa,
+  notifyRoomReservationCreatedToMahasiswa,
+  notifyRoomReservationDecisionToMahasiswa,
   notifyRoomReservationToKalab,
   notifyRoomReservationToLaboran,
 } from "../services/notification/index.js";
+
+// Format jadwal pinjam dari startTime/endTime untuk template notif.
+function formatTanggalPinjam(startTime: Date): string {
+  return new Intl.DateTimeFormat("id-ID", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(startTime);
+}
+
+function formatWaktuPinjam(startTime: Date, endTime: Date): string {
+  const fmt = new Intl.DateTimeFormat("id-ID", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Jakarta",
+  });
+  return `${fmt.format(startTime)} – ${fmt.format(endTime)} WIB`;
+}
 
 const listQuery = z.object({
   skip: z.coerce.number().int().min(0).optional(),
@@ -66,6 +90,7 @@ const createBody = z.object({
 
 const statusBody = z.object({
   status: z.nativeEnum(ReservationStatus),
+  rejectionReason: z.string().trim().min(1).max(500).optional(),
 });
 
 export const reservationsController = {
@@ -110,69 +135,153 @@ export const reservationsController = {
       userId: requester.id,
       suratPermohonanPath: path.relative(path.resolve("."), file.path),
     });
+
+    const tanggalPinjam = formatTanggalPinjam(reservation.startTime);
+    const waktuPinjam = formatWaktuPinjam(
+      reservation.startTime,
+      reservation.endTime,
+    );
+
+    // Notif ke pemohon — konfirmasi pengajuan masuk.
+    void notifyRoomReservationCreatedToMahasiswa(
+      {
+        email: reservation.user.email ?? undefined,
+        phone: reservation.user.waNumber ?? undefined,
+      },
+      {
+        namaPemohon: reservation.user.displayName,
+        nomorInduk: reservation.user.uid,
+        ruangan: reservation.room.name,
+        tanggalPinjam,
+        waktuPinjam,
+      },
+    );
+
+    // Notif ke laboran lab pemilik room — minta diperiksa.
+    const laboranRecipients = (reservation.laboratory?.laborans ?? [])
+      .map((l) => l.user)
+      .filter((u) => u.isActive && (u.email || u.waNumber));
+    const waktuPengajuan = fmtDateTime(reservation.createdAt);
+    for (const laboran of laboranRecipients) {
+      void notifyRoomReservationToLaboran(
+        {
+          email: laboran.email ?? undefined,
+          phone: laboran.waNumber ?? undefined,
+        },
+        {
+          laboranName: laboran.displayName,
+          namaPemohon: reservation.user.displayName,
+          nomorInduk: reservation.user.uid,
+          ruangan: reservation.room.name,
+          tanggalPinjam,
+          waktuPinjam,
+          waktuPengajuan,
+        },
+      );
+    }
+
     res.status(201).json(reservation);
   }),
 
   // Route guard restricts to LABORAN / KEPALA_LAB / ADMIN / SUPER_ADMIN.
   updateStatus: asyncHandler(async (req, res) => {
-    const { status } = statusBody.parse(req.body);
+    const { status, rejectionReason } = statusBody.parse(req.body);
     const actor = await usersService.getByUid(req.user!.uid);
     const reservation = await reservationsService.updateStatus(
       req.params.id!,
       status,
       actor.id,
+      rejectionReason,
     );
 
-    // Fire-and-forget notifications at key stages.
-    // CHECKED → notify Kepala Lab (reservation now awaits their approval).
-    // PENDING (fresh submission path not hit here, hanya lewat create) —
-    // jadi kita notify laboran di create handler juga kalau mau.
+    const tanggalPinjam = formatTanggalPinjam(reservation.startTime);
+    const waktuPinjam = formatWaktuPinjam(
+      reservation.startTime,
+      reservation.endTime,
+    );
+    const pemohonRecipient = {
+      email: reservation.user.email ?? undefined,
+      phone: reservation.user.waNumber ?? undefined,
+    };
+    const activeLaborans = (reservation.laboratory?.laborans ?? [])
+      .map((l) => l.user)
+      .filter((u) => u.isActive && (u.email || u.waNumber));
+
     if (status === ReservationStatus.CHECKED) {
-      // Notify kepala lab. Hardcoded "—" for fields we don't persist yet;
-      // kalau di masa depan ada Laboratory link, ambil kalabName dari sana.
-      const kalabEmail = "-";
-      const kalabPhone = undefined;
-      void notifyRoomReservationToKalab(
-        { email: kalabEmail, phone: kalabPhone },
-        {
-          kalabName: "Kepala Lab",
-          namaPemohon: reservation.user.displayName,
-          nomorInduk: reservation.user.uid,
-          ruangan: reservation.room.name,
-          diperiksaOleh: actor.displayName,
-        },
-      );
+      // Notif pemohon — pengajuan sudah diperiksa laboran.
+      void notifyRoomReservationCheckedToMahasiswa(pemohonRecipient, {
+        namaPemohon: reservation.user.displayName,
+        nomorInduk: reservation.user.uid,
+        ruangan: reservation.room.name,
+        tanggalPinjam,
+        waktuPinjam,
+        diperiksaOleh: actor.displayName,
+      });
+
+      // Notif kepala lab — minta persetujuan.
+      const kalab = reservation.laboratory?.kepalaLab;
+      if (kalab && (kalab.email || kalab.waNumber)) {
+        void notifyRoomReservationToKalab(
+          {
+            email: kalab.email ?? undefined,
+            phone: kalab.waNumber ?? undefined,
+          },
+          {
+            kalabName: kalab.displayName,
+            namaPemohon: reservation.user.displayName,
+            nomorInduk: reservation.user.uid,
+            ruangan: reservation.room.name,
+            diperiksaOleh: actor.displayName,
+          },
+        );
+      }
+    } else if (status === ReservationStatus.APPROVED) {
+      const waktuKeputusan = fmtDateTime(new Date());
+      // Notif pemohon — pengajuan disetujui.
+      void notifyRoomReservationDecisionToMahasiswa(pemohonRecipient, {
+        namaPemohon: reservation.user.displayName,
+        nomorInduk: reservation.user.uid,
+        ruangan: reservation.room.name,
+        tanggalPinjam,
+        waktuPinjam,
+        diprosesOleh: actor.displayName,
+        waktuKeputusan,
+        approved: true,
+      });
+      // Notif laboran lab tsb — siapkan ruangan & jadwal.
+      for (const laboran of activeLaborans) {
+        void notifyRoomReservationApprovedToLaboran(
+          {
+            email: laboran.email ?? undefined,
+            phone: laboran.waNumber ?? undefined,
+          },
+          {
+            laboranName: laboran.displayName,
+            namaPemohon: reservation.user.displayName,
+            nomorInduk: reservation.user.uid,
+            ruangan: reservation.room.name,
+            tanggalPinjam,
+            waktuPinjam,
+            disetujuiOleh: actor.displayName,
+          },
+        );
+      }
+    } else if (status === ReservationStatus.REJECTED) {
+      // Notif pemohon — penolakan + alasan. Laboran tidak di-CC sesuai
+      // permintaan operasional.
+      void notifyRoomReservationDecisionToMahasiswa(pemohonRecipient, {
+        namaPemohon: reservation.user.displayName,
+        nomorInduk: reservation.user.uid,
+        ruangan: reservation.room.name,
+        tanggalPinjam,
+        waktuPinjam,
+        diprosesOleh: actor.displayName,
+        waktuKeputusan: fmtDateTime(new Date()),
+        approved: false,
+        alasan: rejectionReason,
+      });
     }
 
     res.json(reservation);
   }),
 };
-
-// Helper: emit notifikasi ke laboran saat reservasi baru dibuat.
-// Dipanggil dari create handler dengan room detail.
-export async function notifyNewReservationToLaboran(
-  roomId: string,
-  userDisplayName: string,
-  userUid: string,
-) {
-  try {
-    const room = await roomsService.getById(roomId);
-    // Alamat laboran tidak spesifik per-lab di schema lama — kirim ke alamat
-    // default (kalau ada). Di sini kita skip karena belum ada recipient.
-    // Placeholder untuk kelak: iterasi users dengan role LABORAN.
-    void notifyRoomReservationToLaboran(
-      { email: "-", phone: undefined },
-      {
-        laboranName: "Laboran",
-        namaPemohon: userDisplayName,
-        nomorInduk: userUid,
-        ruangan: room.name,
-        tanggalPinjam: "-",
-        waktuPinjam: "-",
-        waktuPengajuan: new Date().toLocaleString("id-ID"),
-      },
-    );
-  } catch {
-    // intentionally silent — notifikasi bersifat best-effort.
-  }
-}
