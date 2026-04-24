@@ -41,33 +41,23 @@ export type Role =
 
 /**
  * Exact-match map from canonical group CN / affiliation value → Role.
- * Compared case-insensitively. Anything not in this map is ignored —
- * substring matching is intentionally avoided so e.g. a group named
- * `admintest` does NOT grant ADMIN.
+ * Compared case-insensitively. Anything not in this map is ignored.
+ *
+ * Hanya marker SIMLAB-spesifik (`simlab-*`) yang dipercaya sebagai
+ * auto-grant role dari IdP. Marker generik seperti `staff`, `dosen`,
+ * `faculty` sengaja DIHAPUS karena UII IdP memberi `affiliation=Staff`
+ * ke semua karyawan (dosen/tendik/laboran sama saja) — mapping generik
+ * itu memicu over-granting. Source of truth untuk non-mahasiswa adalah
+ * tabel `user_roles` (lihat `dbRoles` di bawah), di-manage admin via
+ * `/akun`. MAHASISWA dan SUPER_ADMIN masih di-bootstrap dari email
+ * domain dan env `superAdminUids`.
  */
 const ROLE_MAP: Record<string, Role> = {
-  // SUPER_ADMIN
-  "super-admin": "SUPER_ADMIN",
-  superadmin: "SUPER_ADMIN",
   "simlab-super-admin": "SUPER_ADMIN",
-  // KEPALA_LAB
-  "kepala-lab": "KEPALA_LAB",
-  kalab: "KEPALA_LAB",
   "simlab-kepala-lab": "KEPALA_LAB",
-  // DOSEN
-  dosen: "DOSEN",
-  lecturer: "DOSEN",
-  faculty: "DOSEN",
   "simlab-dosen": "DOSEN",
-  // LABORAN
-  laboran: "LABORAN",
   "simlab-laboran": "LABORAN",
-  // STAFF
-  staff: "STAFF",
   "simlab-staff": "STAFF",
-  // MAHASISWA
-  mahasiswa: "MAHASISWA",
-  student: "MAHASISWA",
   "simlab-mahasiswa": "MAHASISWA",
 };
 
