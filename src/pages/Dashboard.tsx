@@ -163,6 +163,13 @@ const modules: ModuleTile[] = [
     icon: "notebook",
     link: "/manajemen-petunjuk",
   },
+  {
+    title: "Tentang Aplikasi",
+    description: "Informasi versi, pengembang, & kontak",
+    bgColor: "bg-gradient-to-br from-slate-500 to-gray-400",
+    icon: "info",
+    link: "/tentang",
+  },
 ];
 
 export default function Dashboard() {

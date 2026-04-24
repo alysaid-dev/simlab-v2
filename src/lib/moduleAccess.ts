@@ -48,6 +48,8 @@ export const MODULE_ACCESS: Record<string, RoleName[]> = {
   "/petunjuk-dosen": ["DOSEN"],
   "/petunjuk-tendik": ["STAFF"],
   // "/manajemen-petunjuk" — super-admin only (absent dari map).
+  // Tentang — informasi aplikasi, terbuka untuk semua role aktif.
+  "/tentang": ["MAHASISWA", "DOSEN", "LABORAN", "KEPALA_LAB", "STAFF"],
 };
 
 export function canAccess(path: string, roles: RoleName[] | undefined): boolean {

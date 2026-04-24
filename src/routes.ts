@@ -23,6 +23,7 @@ import PetunjukMahasiswa from "./pages/PetunjukMahasiswa";
 import PetunjukDosen from "./pages/PetunjukDosen";
 import PetunjukTendik from "./pages/PetunjukTendik";
 import ManajemenPetunjuk from "./pages/ManajemenPetunjuk";
+import TentangAplikasi from "./pages/TentangAplikasi";
 import { ProtectedRoute, PublicOnlyRoute } from "./components/ProtectedRoute";
 
 const guarded = (C: ComponentType) => () =>
@@ -127,6 +128,10 @@ export const router = createBrowserRouter([
   {
     path: "/manajemen-petunjuk",
     Component: guarded(ManajemenPetunjuk),
+  },
+  {
+    path: "/tentang",
+    Component: guarded(TentangAplikasi),
   },
 ], {
   basename: "/simlab",
