@@ -6,10 +6,18 @@
  */
 
 import nodemailer, { type Transporter } from "nodemailer";
-import axios from "axios";
+import axios, { AxiosError } from "axios";
 
 import { env } from "../../config/env.js";
 import type { SendEmailInput, SendWhatsAppInput } from "./index.js";
+
+const WA_MAX_ATTEMPTS = 3;
+// Backoff sebelum attempt ke-N (index = attempt - 1). Attempt pertama
+// tanpa delay. Total worst-case ~4 detik sebelum give up — Fonnte biasanya
+// recover dari transient 5xx dalam beberapa detik.
+const WA_BACKOFF_MS = [0, 1000, 3000] as const;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 let mailer: Transporter | null = null;
 
@@ -54,16 +62,38 @@ export async function sendWhatsApp(input: SendWhatsAppInput): Promise<boolean> {
     );
     return false;
   }
-  await axios.post(
-    env.whatsapp.apiUrl,
-    { target: input.to, message: input.message },
-    {
-      headers: {
-        Authorization: env.whatsapp.token,
-        "Content-Type": "application/json",
-      },
-      timeout: 15_000,
+  // Fonnte API kadang balas 502 Bad Gateway transient — retry 5xx / network
+  // error, jangan retry 4xx (request salah / auth expired — retry percuma).
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= WA_MAX_ATTEMPTS; attempt++) {
+    if (attempt > 1) {
+      const delay = WA_BACKOFF_MS[attempt - 1] ?? 0;
+      console.warn(
+        `[fonnte] retry ${attempt}/${WA_MAX_ATTEMPTS} for ${input.to} after ${delay}ms`,
+      );
+      await sleep(delay);
     }
-  );
-  return true;
+    try {
+      await axios.post(
+        env.whatsapp.apiUrl,
+        { target: input.to, message: input.message },
+        {
+          headers: {
+            Authorization: env.whatsapp.token,
+            "Content-Type": "application/json",
+          },
+          timeout: 15_000,
+        },
+      );
+      return true;
+    } catch (err) {
+      lastErr = err;
+      const ax = err as AxiosError;
+      const status = ax.response?.status;
+      // Retriable: no response (network/timeout) atau 5xx dari Fonnte.
+      const retriable = status === undefined || status >= 500;
+      if (!retriable) break;
+    }
+  }
+  throw lastErr;
 }

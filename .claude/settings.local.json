@@ -135,7 +135,13 @@
       "Bash(sudo -n /usr/bin/journalctl -u simlab-v2-be --no-pager -n 0)",
       "Bash(sudo -n /usr/bin/journalctl -u simlab-v2-be -n 8 --no-pager)",
       "Bash(sudo -n /usr/bin/systemctl is-active simlab-v2-be)",
-      "Bash(sudo -n /usr/bin/systemctl status simlab-v2-be)"
+      "Bash(sudo -n /usr/bin/systemctl status simlab-v2-be)",
+      "Bash(sudo -n /usr/bin/journalctl -u simlab-v2-be -n 80 --no-pager)",
+      "Bash(sudo -n /usr/bin/journalctl -u simlab-v2-be -n 300 --no-pager)",
+      "Bash(sudo -n /usr/bin/journalctl -u simlab-v2-be --no-pager -n 150)",
+      "Bash(sudo -n /usr/bin/journalctl -u simlab-v2-be --no-pager -n 200)",
+      "Bash(sudo -n /usr/bin/journalctl -u simlab-v2-be -n 120 --no-pager)",
+      "Bash(sudo -n /usr/bin/journalctl -u simlab-v2-be --since \"10:15\" --no-pager)"
     ]
   }
 }

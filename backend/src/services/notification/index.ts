@@ -115,6 +115,18 @@ async function dispatch(
     ),
   ]);
 
+  // Catat hasil dispatch — setiap call-site pakai `void fn()`, jadi kalau
+  // gagal tanpa log di sini problem-nya tidak terlihat di journalctl.
+  const subj = tpl.subject.replace(/[\r\n]+/g, ' ').slice(0, 80);
+  const parts: string[] = [];
+  parts.push(`email:${email.status}${email.reason ? `(${email.reason})` : ''}`);
+  parts.push(`wa:${whatsapp.status}${whatsapp.reason ? `(${whatsapp.reason})` : ''}`);
+  const anyFail = email.status === 'failed' || whatsapp.status === 'failed';
+  const level = anyFail ? 'error' : 'log';
+  console[level](
+    `[notif] to=${recipient.email ?? '-'}/${recipient.phone ?? '-'} subj="${subj}" ${parts.join(' ')}`,
+  );
+
   return { email, whatsapp };
 }
 
