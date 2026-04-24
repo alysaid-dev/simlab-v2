@@ -34,6 +34,7 @@ type BackendEquipmentStatus = "AVAILABLE" | "OUT_OF_STOCK" | "DAMAGED";
 
 interface BackendEquipment {
   id: string;
+  code: string | null;
   name: string;
   category: string | null;
   stock: number;
@@ -93,6 +94,15 @@ const conditionFrontLabel: Record<BackendAssetCondition, ToolCondition> = {
   MAJOR_DAMAGE: "Rusak Berat",
 };
 
+const CONDITION_TO_BACKEND: Record<
+  "Baik" | "Rusak Ringan" | "Rusak Berat",
+  BackendAssetCondition
+> = {
+  Baik: "GOOD",
+  "Rusak Ringan": "MINOR_DAMAGE",
+  "Rusak Berat": "MAJOR_DAMAGE",
+};
+
 function formatIdDate(iso: string): string {
   try {
     return new Date(iso).toLocaleDateString("id-ID", {
@@ -140,6 +150,7 @@ function overdueDays(endIso: string): number {
 
 interface Tool {
   id: string;
+  code: string;
   name: string;
   stock: number;
   totalStock: number;
@@ -182,7 +193,7 @@ interface HistoryRecord {
 }
 
 export default function PeminjamanAlat() {
-  const { alert } = useDialog();
+  const { alert, confirm } = useDialog();
   const [currentView, setCurrentView] = useState<View | null>(null);
 
   // Default return date: +7 hari dari hari ini, jam 16:00.
@@ -219,6 +230,7 @@ export default function PeminjamanAlat() {
   const [selectedTool, setSelectedTool] = useState<Tool | null>(null);
   const [toolForm, setToolForm] = useState({
     id: "",
+    code: "",
     name: "",
     stock: 0,
     condition: "Baik" as ToolCondition,
@@ -243,6 +255,7 @@ export default function PeminjamanAlat() {
       setToolsCatalog(
         data.items.map((e) => ({
           id: e.id,
+          code: e.code ?? "",
           name: e.name,
           stock: e.stock,
           totalStock: e.stock,
@@ -252,6 +265,120 @@ export default function PeminjamanAlat() {
       setEquipmentError(null);
     } catch (err) {
       setEquipmentError(err instanceof Error ? err.message : "Gagal memuat peralatan");
+    }
+  };
+
+  const [toolSubmitting, setToolSubmitting] = useState(false);
+
+  const handleAddTool = async () => {
+    if (!toolForm.code.trim()) {
+      await alert("Kode alat wajib diisi.");
+      return;
+    }
+    if (!toolForm.name.trim()) {
+      await alert("Nama alat wajib diisi.");
+      return;
+    }
+    if (toolForm.condition === "Hilang") {
+      await alert("Kondisi awal tidak boleh 'Hilang'.");
+      return;
+    }
+    setToolSubmitting(true);
+    try {
+      const r = await apiFetch(`${API_BASE}/api/equipment`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: toolForm.code.trim(),
+          name: toolForm.name.trim(),
+          stock: toolForm.stock,
+          condition: CONDITION_TO_BACKEND[toolForm.condition as "Baik" | "Rusak Ringan" | "Rusak Berat"],
+        }),
+      });
+      if (!r.ok) {
+        const err = (await r.json().catch(() => null)) as { message?: string } | null;
+        throw new Error(err?.message ?? `HTTP ${r.status}`);
+      }
+      await refetchEquipment();
+      setShowAddToolModal(false);
+      await alert("Alat berhasil ditambahkan!", { title: "Berhasil" });
+    } catch (err) {
+      await alert(
+        `Gagal menambahkan alat: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    } finally {
+      setToolSubmitting(false);
+    }
+  };
+
+  const handleEditTool = async () => {
+    if (!toolForm.id) return;
+    if (!toolForm.code.trim()) {
+      await alert("Kode alat wajib diisi.");
+      return;
+    }
+    if (!toolForm.name.trim()) {
+      await alert("Nama alat wajib diisi.");
+      return;
+    }
+    if (toolForm.condition === "Hilang") {
+      await alert("Kondisi 'Hilang' belum didukung sistem.");
+      return;
+    }
+    setToolSubmitting(true);
+    try {
+      const r = await apiFetch(
+        `${API_BASE}/api/equipment/${encodeURIComponent(toolForm.id)}`,
+        {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            code: toolForm.code.trim(),
+            name: toolForm.name.trim(),
+            stock: toolForm.stock,
+            condition: CONDITION_TO_BACKEND[toolForm.condition as "Baik" | "Rusak Ringan" | "Rusak Berat"],
+          }),
+        },
+      );
+      if (!r.ok) {
+        const err = (await r.json().catch(() => null)) as { message?: string } | null;
+        throw new Error(err?.message ?? `HTTP ${r.status}`);
+      }
+      await refetchEquipment();
+      setShowEditToolModal(false);
+      await alert("Alat berhasil diperbarui!", { title: "Berhasil" });
+    } catch (err) {
+      await alert(
+        `Gagal memperbarui alat: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    } finally {
+      setToolSubmitting(false);
+    }
+  };
+
+  const handleDeleteTool = async (tool: Tool) => {
+    const ok = await confirm(
+      `Hapus alat "${tool.name}"? Tindakan ini tidak dapat dibatalkan.`,
+      { confirmText: "Hapus", destructive: true, title: "Konfirmasi Hapus" },
+    );
+    if (!ok) return;
+    try {
+      const r = await apiFetch(
+        `${API_BASE}/api/equipment/${encodeURIComponent(tool.id)}`,
+        { method: "DELETE", credentials: "include" },
+      );
+      if (!r.ok) {
+        const err = (await r.json().catch(() => null)) as { message?: string } | null;
+        throw new Error(err?.message ?? `HTTP ${r.status}`);
+      }
+      await refetchEquipment();
+      await alert("Alat berhasil dihapus.", { title: "Berhasil" });
+    } catch (err) {
+      await alert(
+        `Gagal menghapus alat: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   };
 
@@ -269,8 +396,9 @@ export default function PeminjamanAlat() {
         setToolsCatalog(
           data.items.map((e) => ({
             id: e.id,
+            code: e.code ?? "",
             name: e.name,
-              stock: e.stock,
+            stock: e.stock,
             totalStock: e.stock,
             condition: conditionFrontLabel[e.condition],
           })),
@@ -1295,7 +1423,7 @@ export default function PeminjamanAlat() {
               </button>
               <button
                 onClick={() => {
-                  setToolForm({ id: "", name: "", stock: 0, condition: "Baik" });
+                  setToolForm({ id: "", code: "", name: "", stock: 0, condition: "Baik" });
                   setShowAddToolModal(true);
                 }}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
@@ -1322,7 +1450,9 @@ export default function PeminjamanAlat() {
               <tbody>
                 {toolsCatalog.map((tool, index) => (
                   <tr key={index} className="border-b hover:bg-gray-50">
-                    <td className="py-3 px-4 font-mono text-sm text-gray-500">{tool.id}</td>
+                    <td className="py-3 px-4 font-mono text-sm text-gray-500">
+                      {tool.code || <span className="italic text-gray-400">(belum ada)</span>}
+                    </td>
                     <td className="py-3 px-4 text-gray-700">{tool.name}</td>
                     <td className={`py-3 px-4 font-bold ${tool.stock === 0 ? "text-red-600 bg-red-100" : "text-gray-700"}`}>
                       {tool.stock}
@@ -1340,6 +1470,7 @@ export default function PeminjamanAlat() {
                             setSelectedTool(tool);
                             setToolForm({
                               id: tool.id,
+                              code: tool.code,
                               name: tool.name,
                               stock: tool.stock,
                               condition: tool.condition,
@@ -1350,7 +1481,10 @@ export default function PeminjamanAlat() {
                         >
                           <Pencil className="w-4 h-4" />
                         </button>
-                        <button className="text-red-600 hover:text-red-700">
+                        <button
+                          onClick={() => void handleDeleteTool(tool)}
+                          className="text-red-600 hover:text-red-700"
+                        >
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -1379,16 +1513,16 @@ export default function PeminjamanAlat() {
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        ID Alat <span className="text-red-500">*</span>
+                        Kode Alat <span className="text-red-500">*</span>
                       </label>
                       <input
                         type="text"
-                        value={toolForm.id}
-                        onChange={(e) => setToolForm({ ...toolForm, id: e.target.value })}
+                        value={toolForm.code}
+                        onChange={(e) => setToolForm({ ...toolForm, code: e.target.value })}
                         placeholder="ALT-001"
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
-                      <p className="text-xs text-gray-500 mt-1">ID unik alat. Contoh: ALT-001</p>
+                      <p className="text-xs text-gray-500 mt-1">Kode unik alat. Contoh: ALT-001, KBL-HDMI-02.</p>
                     </div>
 
                     <div>
@@ -1435,19 +1569,17 @@ export default function PeminjamanAlat() {
                   <div className="flex gap-3 mt-6">
                     <button
                       onClick={() => setShowAddToolModal(false)}
-                      className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                      disabled={toolSubmitting}
+                      className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
                     >
                       Batal
                     </button>
                     <button
-                      onClick={async () => {
-                        console.log("Tool added:", toolForm);
-                        await alert("Alat berhasil ditambahkan!", { title: "Berhasil" });
-                        setShowAddToolModal(false);
-                      }}
-                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                      onClick={() => void handleAddTool()}
+                      disabled={toolSubmitting}
+                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
                     >
-                      Simpan
+                      {toolSubmitting ? "Menyimpan..." : "Simpan"}
                     </button>
                   </div>
                 </div>
@@ -1472,12 +1604,15 @@ export default function PeminjamanAlat() {
 
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">ID Alat</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Kode Alat <span className="text-red-500">*</span>
+                      </label>
                       <input
                         type="text"
-                        value={toolForm.id}
-                        readOnly
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100"
+                        value={toolForm.code}
+                        onChange={(e) => setToolForm({ ...toolForm, code: e.target.value })}
+                        placeholder="ALT-001"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
                     </div>
 
@@ -1526,19 +1661,17 @@ export default function PeminjamanAlat() {
                   <div className="flex gap-3 mt-6">
                     <button
                       onClick={() => setShowEditToolModal(false)}
-                      className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                      disabled={toolSubmitting}
+                      className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
                     >
                       Batal
                     </button>
                     <button
-                      onClick={async () => {
-                        console.log("Tool updated:", toolForm);
-                        await alert("Alat berhasil diperbarui!", { title: "Berhasil" });
-                        setShowEditToolModal(false);
-                      }}
-                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                      onClick={() => void handleEditTool()}
+                      disabled={toolSubmitting}
+                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
                     >
-                      Simpan Perubahan
+                      {toolSubmitting ? "Menyimpan..." : "Simpan Perubahan"}
                     </button>
                   </div>
                 </div>

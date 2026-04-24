@@ -12,6 +12,7 @@ const listQuery = z.object({
 });
 
 const createBody = z.object({
+  code: z.string().trim().min(1).optional(),
   name: z.string().min(1),
   category: z.string().optional(),
   stock: z.number().int().min(0).optional(),
