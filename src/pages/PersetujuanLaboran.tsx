@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { PageLayout } from "../components/PageLayout";
-import { ClipboardCheck, X, Construction, Loader2, AlertTriangle } from "lucide-react";
+import { ClipboardCheck, X, Construction, Loader2, AlertTriangle, FileText } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiFetch } from "../lib/apiFetch";
 import { useDialog } from "../lib/dialog";
+import { RejectReservationModal } from "../components/RejectReservationModal";
+import { SuratPreviewModal } from "../components/SuratPreviewModal";
 
 type View = "peminjaman-ruangan" | "bebas-lab";
 
@@ -24,6 +26,7 @@ interface BackendReservation {
   endTime: string;
   status: BackendReservationStatus;
   notes: string | null;
+  suratPermohonanPath: string | null;
   createdAt: string;
   user?: { displayName: string; uid: string; email: string };
   room?: { name: string; code: string };
@@ -255,18 +258,29 @@ export default function PersetujuanLaboran() {
     };
   }, []);
 
+  // State untuk modal alasan tolak reservasi.
+  const [rejectTarget, setRejectTarget] = useState<BackendReservation | null>(
+    null,
+  );
+  const [rejectSubmitting, setRejectSubmitting] = useState(false);
+  const [previewTarget, setPreviewTarget] = useState<BackendReservation | null>(
+    null,
+  );
+
   const handleReservationAction = async (
     id: string,
     setuju: boolean,
   ) => {
+    if (!setuju) {
+      // Tolak — buka modal alasan, bukan langsung confirm.
+      const target = pendingReservations.find((r) => r.id === id);
+      if (target) setRejectTarget(target);
+      return;
+    }
     const ok = await confirm(
-      setuju
-        ? "Setujui reservasi ini dan teruskan ke Kepala Lab?"
-        : "Tolak reservasi ini?",
-      setuju ? {} : { destructive: true, confirmText: "Tolak" },
+      "Setujui reservasi ini dan teruskan ke Kepala Lab?",
     );
     if (!ok) return;
-    const status = setuju ? "CHECKED" : "REJECTED";
     try {
       const res = await apiFetch(
         `${API_BASE}/api/reservations/${encodeURIComponent(id)}/status`,
@@ -274,7 +288,7 @@ export default function PersetujuanLaboran() {
           method: "PATCH",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status }),
+          body: JSON.stringify({ status: "CHECKED" }),
         },
       );
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -283,6 +297,36 @@ export default function PersetujuanLaboran() {
       await alert(
         `Gagal: ${err instanceof Error ? err.message : String(err)}`,
       );
+    }
+  };
+
+  const submitReject = async (reason: string) => {
+    if (!rejectTarget) return;
+    setRejectSubmitting(true);
+    try {
+      const res = await apiFetch(
+        `${API_BASE}/api/reservations/${encodeURIComponent(rejectTarget.id)}/status`,
+        {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "REJECTED", rejectionReason: reason }),
+        },
+      );
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as
+          | { message?: string }
+          | null;
+        throw new Error(body?.message ?? `HTTP ${res.status}`);
+      }
+      setRejectTarget(null);
+      void fetchReservations();
+    } catch (err) {
+      await alert(
+        `Gagal menolak: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    } finally {
+      setRejectSubmitting(false);
     }
   };
 
@@ -391,10 +435,7 @@ export default function PersetujuanLaboran() {
                   Ruangan
                 </th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-900">
-                  Waktu
-                </th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-900">
-                  Keperluan
+                  Detail
                 </th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-900">
                   Tindakan
@@ -403,7 +444,7 @@ export default function PersetujuanLaboran() {
             </thead>
             <tbody>
               {pendingReservations.map((r) => (
-                <tr key={r.id} className="border-b hover:bg-gray-50">
+                <tr key={r.id} className="border-b hover:bg-gray-50 align-top">
                   <td className="py-3 px-4">
                     <div className="font-medium text-gray-900">
                       {r.user?.displayName ?? "-"}
@@ -415,16 +456,57 @@ export default function PersetujuanLaboran() {
                   <td className="py-3 px-4 text-gray-700">
                     {r.room?.name ?? "-"}
                   </td>
-                  <td className="py-3 px-4 text-sm text-gray-700">
-                    {new Date(r.startTime).toLocaleString("id-ID")}
-                    <br />
-                    s/d {new Date(r.endTime).toLocaleString("id-ID")}
-                  </td>
-                  <td className="py-3 px-4 text-gray-700 max-w-xs truncate">
-                    {r.purpose}
+                  <td className="py-3 px-4 text-sm text-gray-700 max-w-md">
+                    <dl className="space-y-1.5">
+                      <div className="flex gap-2">
+                        <dt className="font-medium text-gray-600 w-28 flex-shrink-0">
+                          Tanggal mulai
+                        </dt>
+                        <dd>{new Date(r.startTime).toLocaleString("id-ID")}</dd>
+                      </div>
+                      <div className="flex gap-2">
+                        <dt className="font-medium text-gray-600 w-28 flex-shrink-0">
+                          Tanggal akhir
+                        </dt>
+                        <dd>{new Date(r.endTime).toLocaleString("id-ID")}</dd>
+                      </div>
+                      <div className="flex gap-2">
+                        <dt className="font-medium text-gray-600 w-28 flex-shrink-0">
+                          Keperluan
+                        </dt>
+                        <dd className="break-words">{r.purpose}</dd>
+                      </div>
+                      <div className="flex gap-2">
+                        <dt className="font-medium text-gray-600 w-28 flex-shrink-0">
+                          Catatan
+                        </dt>
+                        <dd className="break-words">
+                          {r.notes?.trim() ? r.notes : <span className="text-gray-400">—</span>}
+                        </dd>
+                      </div>
+                      <div className="flex gap-2">
+                        <dt className="font-medium text-gray-600 w-28 flex-shrink-0">
+                          Surat
+                        </dt>
+                        <dd>
+                          {r.suratPermohonanPath ? (
+                            <button
+                              type="button"
+                              onClick={() => setPreviewTarget(r)}
+                              className="inline-flex items-center gap-1 text-blue-700 hover:text-blue-900 hover:underline"
+                            >
+                              <FileText className="w-4 h-4" />
+                              Lihat surat (PDF)
+                            </button>
+                          ) : (
+                            <span className="text-gray-400">—</span>
+                          )}
+                        </dd>
+                      </div>
+                    </dl>
                   </td>
                   <td className="py-3 px-4">
-                    <div className="flex gap-2">
+                    <div className="flex flex-col gap-2">
                       <button
                         onClick={() => handleReservationAction(r.id, true)}
                         className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-sm"
@@ -950,6 +1032,28 @@ export default function PersetujuanLaboran() {
       }
       hideHeader={!currentView}
     >
+      <RejectReservationModal
+        open={!!rejectTarget}
+        pemohonNama={rejectTarget?.user?.displayName}
+        ruanganNama={rejectTarget?.room?.name}
+        submitting={rejectSubmitting}
+        onCancel={() => setRejectTarget(null)}
+        onSubmit={submitReject}
+      />
+      <SuratPreviewModal
+        open={!!previewTarget}
+        src={
+          previewTarget
+            ? `${API_BASE}/api/reservations/${encodeURIComponent(previewTarget.id)}/surat`
+            : ""
+        }
+        title={
+          previewTarget
+            ? `Surat — ${previewTarget.user?.displayName ?? "-"} / ${previewTarget.room?.name ?? "-"}`
+            : "Preview Surat"
+        }
+        onClose={() => setPreviewTarget(null)}
+      />
       {currentView ? renderContent() : (
         <div className="max-w-md">
           {/* Icon Container */}

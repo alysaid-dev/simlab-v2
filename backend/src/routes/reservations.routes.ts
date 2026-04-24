@@ -11,6 +11,7 @@ router.use(requireAuth);
 
 router.get("/", reservationsController.list);
 router.get("/:id", reservationsController.getById);
+router.get("/:id/surat", reservationsController.serveSurat);
 // Multipart upload — "surat" = File (PDF ≤ 200KB).
 router.post(
   "/",

@@ -110,6 +110,32 @@ export const reservationsController = {
     res.json(reservation);
   }),
 
+  // Stream surat permohonan PDF inline. Authz sama dengan getById:
+  // owner + LABORAN/KEPALA_LAB/SUPER_ADMIN.
+  serveSurat: asyncHandler(async (req, res) => {
+    const reservation = await reservationsService.getById(req.params.id!);
+    const requester = await usersService.getByUid(req.user!.uid);
+    const isOwner = reservation.userId === requester.id;
+    if (!isOwner && !hasAnyRole(req.user!, "LABORAN", "KEPALA_LAB", "SUPER_ADMIN")) {
+      throw new HttpError(403, "Anda tidak berhak melihat surat ini");
+    }
+    if (!reservation.suratPermohonanPath) {
+      throw new HttpError(404, "Surat tidak ditemukan");
+    }
+    // Defense-in-depth: pastikan path resolve tetap di dalam UPLOAD_DIR,
+    // jangan pernah trust field DB sebagai raw filesystem path.
+    const abs = path.resolve(reservation.suratPermohonanPath);
+    if (!abs.startsWith(UPLOAD_DIR + path.sep)) {
+      throw new HttpError(400, "Path surat tidak valid");
+    }
+    if (!fs.existsSync(abs)) {
+      throw new HttpError(404, "File surat tidak ditemukan di server");
+    }
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", "inline");
+    fs.createReadStream(abs).pipe(res);
+  }),
+
   create: asyncHandler(async (req, res) => {
     const body = createBody.parse(req.body);
     const requester = await usersService.getByUid(req.user!.uid);
