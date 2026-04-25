@@ -10,7 +10,58 @@ version: "2.0.1"
 
 # 1. Pendahuluan
 
-## 1.1 Tujuan
+## 1.1 Latar Belakang
+
+Sejak diluncurkan pada tanggal **18 Maret 2025**, Sistem Informasi Manajemen Laboratorium (SIMLAB) Statistika versi 1 telah digunakan secara aktif oleh mahasiswa, dosen, dan tenaga kependidikan FMIPA UII. Dalam masa operasinya, ditemukan sejumlah kendala yang tersebar ke berbagai tingkatan pengguna serta diterima berbagai umpan balik (*feedback*) dari mahasiswa, dosen, dan tenaga kependidikan.
+
+Dokumen ini disusun sebagai **dasar perencanaan perbaikan dan peningkatan fitur** pada SIMLAB Statistika menuju versi 2 (v2.0.1). URD ini memformalkan kebutuhan pengguna yang akan diakomodasi pada versi baru, sekaligus menjadi acuan bersama antara pengelola laboratorium dan tim pengembang dalam proses *handover*.
+
+## 1.2 Temuan Kendala pada Versi 1
+
+Subbagian ini merangkum kendala signifikan yang ditemukan pada SIMLAB V1 setelah dioperasionalkan. Kendala-kendala berikut menjadi salah satu pendorong utama penyusunan persyaratan pada versi 2.
+
+### 1.2.1 Nama Dosen Tidak Muncul di Form Peminjaman Laptop
+
+Kendala ini terjadi pada tingkatan pengguna **Mahasiswa**. Mahasiswa yang hendak meminjam laptop tidak dapat memilih nama dosen pembimbing karena data dosen tidak muncul pada *dropdown*. Pemeriksaan pada basis data menunjukkan data dosen tetap ada, dan pada *dashboard* Super Admin peran dosen telah sesuai. Dengan demikian, akar masalah berada pada lapisan tampilan/penyajian, bukan pada data.
+
+*[Gambar 1 — Data dosen pada basis data (disisipkan)]*
+
+*[Gambar 2 — Peran dosen pada Super Admin (disisipkan)]*
+
+*[Gambar 3 — Tampilan dosen tidak ditemukan pada pengguna mahasiswa (disisipkan)]*
+
+### 1.2.2 Data Peminjaman Muncul Selain ID yang Diinput
+
+Kendala ini terjadi pada tingkatan pengguna **Laboran**. Ketika laboran memeriksa detail peminjaman seorang mahasiswa dengan memasukkan ID pada kolom pencarian, sistem justru menampilkan **seluruh peminjaman aktif**, bukan hanya yang sesuai ID. Akibatnya, laboran harus kembali ke tab Aset dan menelusuri detail peminjaman satu per satu — alur yang tidak efisien dan rawan kesalahan.
+
+*[Gambar 4 — Tampilan detail peminjaman dengan input ID pengguna (disisipkan)]*
+
+### 1.2.3 Mahasiswa Sudah Bebas Pinjaman tetapi Tidak Bisa Mengajukan Surat Bebas Lab
+
+Kendala ini terjadi pada tingkatan pengguna **Mahasiswa**. Mahasiswa yang pernah meminjam laptop dan telah mengembalikannya tidak dapat mengajukan permohonan Surat Bebas Lab. Pemeriksaan pada basis data menunjukkan mahasiswa bersangkutan **tidak lagi memiliki tanggungan**, namun tombol "Pengajuan Surat Bebas Lab" tetap berstatus *disabled*. Hal ini mengindikasikan logika *gating* pada sisi tampilan tidak konsisten dengan kondisi data sebenarnya.
+
+*[Gambar 5 — Basis data: mahasiswa tidak memiliki pinjaman aktif (disisipkan)]*
+
+*[Gambar 6 — Tombol Pengajuan Surat Bebas Lab masih ter-disable (disisipkan)]*
+
+### 1.2.4 Nama Dosen Tercampur dengan Mahasiswa
+
+Pada fitur pengajuan peminjaman laptop, ketika mahasiswa memilih nama dosen pada *dropdown*, sistem menampilkan **seluruh pengguna yang terdaftar** di SIMLAB tanpa filter peran. Akibatnya, mahasiswa berisiko salah memilih nama bukan-dosen sebagai pembimbing dan UX menjadi membingungkan.
+
+*[Gambar 7 — Nama dosen bercampur dengan seluruh pengguna terdaftar (disisipkan)]*
+
+### 1.2.5 Implikasi terhadap Persyaratan Versi 2
+
+Keempat temuan di atas dipetakan menjadi persyaratan eksplisit pada SIMLAB V2:
+
+| Temuan V1                                      | Persyaratan V2 yang Mengakomodasi                                       |
+| ---------------------------------------------- | ----------------------------------------------------------------------- |
+| 1.2.1 Nama dosen tidak muncul                  | FR-LOAN-001 + FR-USER-001 (filter peran DOSEN pada *dropdown*)          |
+| 1.2.2 Pencarian peminjaman tidak ter-filter    | FR-LOAN-010 + FR-HIST-001 (riwayat ter-filter per pengguna)             |
+| 1.2.3 Tombol Surat Bebas Lab salah *gating*    | FR-CLEAR-001 + NFR-USE-001 (otorisasi & UX konsisten dengan data)       |
+| 1.2.4 Dosen bercampur dengan semua pengguna    | FR-USER-001 (daftar pengguna dengan filter peran)                       |
+
+## 1.3 Tujuan
 
 Dokumen ini adalah *User Requirement Document* (URD) untuk sistem **SIMLAB V2** versi 2.0.1. Tujuannya:
 
@@ -21,7 +72,7 @@ d. Menjadi rujukan bila kelak dilakukan perubahan, audit, atau pengembangan lanj
 
 Dokumen ini disusun mengikuti pendekatan **IEEE Std 29148-2018** (sebelumnya IEEE 830) untuk spesifikasi kebutuhan perangkat lunak.
 
-## 1.2 Ruang Lingkup
+## 1.4 Ruang Lingkup
 
 **Nama Produk:** Sistem Informasi Manajemen Laboratorium (SIMLAB) Statistika versi 2.0.1.
 
@@ -46,7 +97,7 @@ Dokumen ini disusun mengikuti pendekatan **IEEE Std 29148-2018** (sebelumnya IEE
 - Sistem absensi pengguna lab.
 - Integrasi dengan sistem akademik kampus (SIMAK).
 
-## 1.3 Definisi & Akronim
+## 1.5 Definisi & Akronim
 
 | Istilah         | Definisi                                                                     |
 | --------------- | ---------------------------------------------------------------------------- |
@@ -66,15 +117,15 @@ Dokumen ini disusun mengikuti pendekatan **IEEE Std 29148-2018** (sebelumnya IEE
 | **API**         | *Application Programming Interface*                                           |
 | **UI/UX**       | *User Interface / User Experience*                                            |
 
-## 1.4 Referensi
+## 1.6 Referensi
 
 - IEEE Std 29148-2018 — *Systems and software engineering — Life cycle processes — Requirements engineering.*
 - Dokumen "SIMLAB V2 — Dokumentasi Teknis" (April 2026) — referensi arsitektur dan implementasi.
 - Pedoman Penyelenggaraan Akademik FMIPA UII (terkait alur yudisium dan kelengkapan administratif).
 
-## 1.5 Struktur Dokumen
+## 1.7 Struktur Dokumen
 
-Bab 2 menjelaskan deskripsi umum sistem, peran pengguna, dan asumsi/konsuensi yang berlaku. Bab 3 berisi persyaratan fungsional (FR) per modul. Bab 4 berisi persyaratan non-fungsional (NFR). Bab 5 menyajikan *use case* utama per peran. Bab 6 menjabarkan *constraints* dan asumsi. Bab 7 berisi kriteria penerimaan dan halaman pengesahan.
+Bab 1 (sedang dibaca) memuat latar belakang, temuan kendala V1, tujuan, ruang lingkup, akronim, dan referensi. Bab 2 menjelaskan deskripsi umum sistem, peran pengguna, dan asumsi/konsekuensi yang berlaku. Bab 3 berisi persyaratan fungsional (FR) per modul. Bab 4 berisi persyaratan non-fungsional (NFR). Bab 5 menyajikan *use case* utama per peran. Bab 6 menjabarkan *constraints* dan asumsi. Bab 7 berisi kriteria penerimaan dan halaman pengesahan.
 
 \newpage
 
