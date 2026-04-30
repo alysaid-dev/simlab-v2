@@ -731,6 +731,11 @@ export default function Transaksi() {
                             id="nim"
                             value={searchNIM}
                             onChange={(e) => setSearchNIM(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && searchNIM && searchState !== "loading") {
+                                void handleSearch();
+                              }
+                            }}
                             placeholder="Scan atau masukkan NIM Mahasiswa"
                             className="text-base pr-10"
                             disabled={searchState === "loading"}
