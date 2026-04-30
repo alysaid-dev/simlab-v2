@@ -10,6 +10,10 @@ const listQuery = z.object({
   take: z.coerce.number().int().min(1).max(200).optional(),
   search: z.string().trim().min(1).optional(),
   role: z.nativeEnum(RoleName).optional(),
+  isActive: z
+    .enum(["true", "false"])
+    .transform((v) => v === "true")
+    .optional(),
 });
 
 const createBody = z.object({

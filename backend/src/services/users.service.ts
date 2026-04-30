@@ -85,9 +85,10 @@ export const usersService = {
       take?: number;
       search?: string;
       role?: RoleName;
+      isActive?: boolean;
     } = {},
   ) {
-    const { skip = 0, take = 50, search, role } = params;
+    const { skip = 0, take = 50, search, role, isActive } = params;
     const where: Prisma.UserWhereInput = {
       ...(search
         ? {
@@ -101,6 +102,7 @@ export const usersService = {
       ...(role
         ? { roles: { some: { role: { name: role } } } }
         : {}),
+      ...(isActive !== undefined ? { isActive } : {}),
     };
     const [items, total] = await Promise.all([
       prisma.user.findMany({
