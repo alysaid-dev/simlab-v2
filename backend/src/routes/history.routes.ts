@@ -12,6 +12,7 @@ router.use(requireAuth);
 
 router.get("/loans/ta", historyController.listLoansTA);
 router.get("/loans/practicum", historyController.listLoansPracticum);
+router.get("/loans/equipment", historyController.listEquipmentLoans);
 router.get("/loans/:id/timeline", historyController.loanTimeline);
 
 router.get("/clearances", historyController.listClearances);

@@ -7,13 +7,20 @@ import { formatDateTime } from "../lib/format";
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
 
-type ViewKey = "ta" | "practicum" | "clearance" | "reservation" | "consumables";
+type ViewKey =
+  | "ta"
+  | "practicum"
+  | "equipment"
+  | "clearance"
+  | "reservation"
+  | "consumables";
 
 // Tab "Barang Keluar" hanya relevan untuk LABORAN (pencatat) & SUPER_ADMIN
 // — role lain bukan pencatat, datanya pasti kosong → tab disembunyikan.
 const BASE_SIDEBAR_ITEMS = [
   "Laptop TA",
   "Laptop Praktikum",
+  "Peminjaman Alat",
   "Surat Bebas Lab",
   "Peminjaman Ruang",
 ];
@@ -22,12 +29,15 @@ const LABORAN_SIDEBAR_ITEMS = [...BASE_SIDEBAR_ITEMS, "Barang Keluar"];
 const VIEW_BY_LABEL: Record<string, ViewKey> = {
   "Laptop TA": "ta",
   "Laptop Praktikum": "practicum",
+  "Peminjaman Alat": "equipment",
   "Surat Bebas Lab": "clearance",
   "Peminjaman Ruang": "reservation",
   "Barang Keluar": "consumables",
 };
 
-type TimelineView = Exclude<ViewKey, "consumables">;
+// Equipment loan punya banyak item per loan → render mirror "Barang Keluar"
+// (1 baris/loan + modal detail rincian item), bukan timeline-style modal.
+type TimelineView = Exclude<ViewKey, "consumables" | "equipment">;
 
 const ENDPOINT_BY_VIEW: Record<TimelineView, { list: string; timeline: (id: string) => string }> = {
   ta: {
@@ -49,6 +59,7 @@ const ENDPOINT_BY_VIEW: Record<TimelineView, { list: string; timeline: (id: stri
 };
 
 const CONSUMABLES_ENDPOINT = "/api/history/consumables/outgoing";
+const EQUIPMENT_ENDPOINT = "/api/history/loans/equipment";
 
 interface ConsumableLine {
   consumableId: string;
@@ -64,6 +75,38 @@ interface ConsumableBucket {
   notes: string | null;
   totalItem: number;
   lines: ConsumableLine[];
+}
+
+interface EquipmentLoanItem {
+  id: string;
+  quantity: number;
+  equipment: {
+    id: string;
+    name: string;
+    code: string | null;
+    category: string | null;
+  } | null;
+}
+
+type EquipmentLoanStatus =
+  | "PENDING"
+  | "APPROVED"
+  | "REJECTED"
+  | "ACTIVE"
+  | "RETURNED"
+  | "OVERDUE"
+  | "CANCELLED";
+
+interface EquipmentLoanRecord {
+  id: string;
+  status: EquipmentLoanStatus;
+  startDate: string;
+  endDate: string;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  user: { id: string; uid: string; displayName: string };
+  items: EquipmentLoanItem[];
 }
 
 // Parse penerima dari notes otomatis ("Diambil oleh NAME (NIM)"). Kalau
@@ -157,6 +200,9 @@ export default function History() {
 
   const [rows, setRows] = useState<Row[]>([]);
   const [buckets, setBuckets] = useState<ConsumableBucket[]>([]);
+  const [equipmentLoans, setEquipmentLoans] = useState<EquipmentLoanRecord[]>(
+    [],
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -171,6 +217,10 @@ export default function History() {
   const [selectedBucket, setSelectedBucket] = useState<ConsumableBucket | null>(
     null,
   );
+  // Detail untuk view equipment → modal rincian item + status (mirror pola
+  // Barang Keluar; data sudah lengkap di list response).
+  const [selectedEquipmentLoan, setSelectedEquipmentLoan] =
+    useState<EquipmentLoanRecord | null>(null);
 
   const loadList = useCallback(async () => {
     setLoading(true);
@@ -187,6 +237,18 @@ export default function History() {
         const data = (await res.json()) as { items: ConsumableBucket[] };
         setBuckets(data.items);
         setRows([]);
+        setEquipmentLoans([]);
+      } else if (view === "equipment") {
+        const res = await apiFetch(`${API_BASE}${EQUIPMENT_ENDPOINT}?take=200`, {
+          credentials: "include",
+        });
+        if (!res.ok) {
+          throw new Error(`Gagal memuat data (HTTP ${res.status})`);
+        }
+        const data = (await res.json()) as { items: EquipmentLoanRecord[] };
+        setEquipmentLoans(data.items);
+        setRows([]);
+        setBuckets([]);
       } else {
         const endpoint = ENDPOINT_BY_VIEW[view];
         const res = await apiFetch(`${API_BASE}${endpoint.list}?take=200`, {
@@ -198,11 +260,13 @@ export default function History() {
         const data = (await res.json()) as { items: Record<string, unknown>[] };
         setRows(data.items.map((item) => normalizeRow(view, item)));
         setBuckets([]);
+        setEquipmentLoans([]);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Gagal memuat data");
       setRows([]);
       setBuckets([]);
+      setEquipmentLoans([]);
     } finally {
       setLoading(false);
     }
@@ -214,7 +278,7 @@ export default function History() {
 
   const openDetail = useCallback(
     async (id: string) => {
-      if (view === "consumables") return; // handled separately
+      if (view === "consumables" || view === "equipment") return; // handled separately
       const endpoint = ENDPOINT_BY_VIEW[view];
       setDetailId(id);
       setTimeline(null);
@@ -249,10 +313,22 @@ export default function History() {
   const tableCaption = useMemo(() => {
     if (loading) return "Memuat...";
     if (error) return error;
-    const count = view === "consumables" ? buckets.length : rows.length;
+    const count =
+      view === "consumables"
+        ? buckets.length
+        : view === "equipment"
+          ? equipmentLoans.length
+          : rows.length;
     if (count === 0) return "Belum ada data riwayat";
     return `${count} data`;
-  }, [loading, error, rows.length, buckets.length, view]);
+  }, [
+    loading,
+    error,
+    rows.length,
+    buckets.length,
+    equipmentLoans.length,
+    view,
+  ]);
 
   return (
     <PageLayout
@@ -340,6 +416,107 @@ export default function History() {
                   <tr>
                     <td
                       colSpan={7}
+                      className="px-4 py-8 text-center text-sm text-gray-500"
+                    >
+                      {error ?? "Tidak ada data"}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          ) : view === "equipment" ? (
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                    NIM
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                    Nama Peminjam
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                    Alat
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                    Total Qty
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                    Status
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                    Tgl Pinjam
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                    Tgl Kembali
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">
+                    Detail
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {equipmentLoans.map((loan) => {
+                  const firstItem = loan.items[0];
+                  const totalQty = loan.items.reduce(
+                    (sum, it) => sum + it.quantity,
+                    0,
+                  );
+                  return (
+                    <tr key={loan.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-sm text-gray-900 font-mono">
+                        {loan.user.uid}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-900">
+                        {loan.user.displayName}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-900">
+                        <div className="flex items-center gap-2">
+                          <span>{firstItem?.equipment?.name ?? "-"}</span>
+                          {loan.items.length > 1 && (
+                            <span className="inline-flex px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-xs font-medium">
+                              +{loan.items.length - 1} lainnya
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-900">
+                        {totalQty}
+                      </td>
+                      <td className="px-4 py-3 text-sm">
+                        <span
+                          className={`inline-flex px-2 py-1 rounded text-xs font-medium ${
+                            loan.status === "RETURNED"
+                              ? "bg-green-100 text-green-800"
+                              : loan.status === "REJECTED"
+                                ? "bg-red-100 text-red-800"
+                                : "bg-gray-100 text-gray-800"
+                          }`}
+                        >
+                          {loan.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        {formatDateTime(loan.startDate)}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        {formatDateTime(loan.endDate)}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedEquipmentLoan(loan)}
+                          className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+                        >
+                          Detail
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {equipmentLoans.length === 0 && !loading && (
+                  <tr>
+                    <td
+                      colSpan={8}
                       className="px-4 py-8 text-center text-sm text-gray-500"
                     >
                       {error ?? "Tidak ada data"}
@@ -517,6 +694,139 @@ export default function History() {
                           </td>
                           <td className="px-3 py-2 text-sm text-gray-900 text-right font-medium">
                             {line.quantity}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedEquipmentLoan && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          onClick={() => setSelectedEquipmentLoan(null)}
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-6 py-4 border-b">
+              <h2 className="text-lg font-semibold text-gray-900">
+                Rincian Peminjaman Alat
+              </h2>
+              <button
+                type="button"
+                onClick={() => setSelectedEquipmentLoan(null)}
+                className="p-1 hover:bg-gray-100 rounded"
+                aria-label="Tutup"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="px-6 py-4 overflow-y-auto space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-gray-500">Peminjam</p>
+                  <p className="font-medium text-gray-900">
+                    {selectedEquipmentLoan.user.displayName}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-gray-500">NIM / ID</p>
+                  <p className="font-medium text-gray-900 font-mono">
+                    {selectedEquipmentLoan.user.uid}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-gray-500">Status</p>
+                  <p>
+                    <span
+                      className={`inline-flex px-2 py-1 rounded text-xs font-medium ${
+                        selectedEquipmentLoan.status === "RETURNED"
+                          ? "bg-green-100 text-green-800"
+                          : selectedEquipmentLoan.status === "REJECTED"
+                            ? "bg-red-100 text-red-800"
+                            : "bg-gray-100 text-gray-800"
+                      }`}
+                    >
+                      {selectedEquipmentLoan.status}
+                    </span>
+                  </p>
+                </div>
+                <div>
+                  <p className="text-gray-500">Diajukan</p>
+                  <p className="font-medium text-gray-900">
+                    {formatDateTime(selectedEquipmentLoan.createdAt)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-gray-500">Tanggal Pinjam</p>
+                  <p className="font-medium text-gray-900">
+                    {formatDateTime(selectedEquipmentLoan.startDate)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-gray-500">Tanggal Kembali</p>
+                  <p className="font-medium text-gray-900">
+                    {formatDateTime(selectedEquipmentLoan.endDate)}
+                  </p>
+                </div>
+                {selectedEquipmentLoan.notes && (
+                  <div className="sm:col-span-2">
+                    <p className="text-gray-500">Catatan</p>
+                    <p className="font-medium text-gray-800 whitespace-pre-wrap">
+                      {selectedEquipmentLoan.notes}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <p className="text-sm font-semibold text-gray-900 mb-2">
+                  Alat ({selectedEquipmentLoan.items.length} jenis • total{" "}
+                  {selectedEquipmentLoan.items.reduce(
+                    (sum, it) => sum + it.quantity,
+                    0,
+                  )}
+                  )
+                </p>
+                <div className="border rounded overflow-hidden">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">
+                          Nama Alat
+                        </th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">
+                          Kode
+                        </th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">
+                          Kategori
+                        </th>
+                        <th className="px-3 py-2 text-right text-xs font-semibold text-gray-600 uppercase">
+                          Jumlah
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {selectedEquipmentLoan.items.map((item) => (
+                        <tr key={item.id}>
+                          <td className="px-3 py-2 text-sm text-gray-900">
+                            {item.equipment?.name ?? "-"}
+                          </td>
+                          <td className="px-3 py-2 text-sm text-gray-700 font-mono">
+                            {item.equipment?.code ?? "-"}
+                          </td>
+                          <td className="px-3 py-2 text-sm text-gray-700">
+                            {item.equipment?.category ?? "-"}
+                          </td>
+                          <td className="px-3 py-2 text-sm text-gray-900 text-right font-medium">
+                            {item.quantity}
                           </td>
                         </tr>
                       ))}

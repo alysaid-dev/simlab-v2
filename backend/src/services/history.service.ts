@@ -1,6 +1,7 @@
 import {
   ClearanceStatus,
   ConsumableTransactionType,
+  EquipmentLoanStatus,
   LoanStatus,
   LoanType,
   Prisma,
@@ -26,6 +27,11 @@ const RESERVATION_FINAL_STATUSES: ReservationStatus[] = [
   ReservationStatus.CANCELLED,
   ReservationStatus.COMPLETED,
 ];
+const EQUIPMENT_LOAN_FINAL_STATUSES: EquipmentLoanStatus[] = [
+  EquipmentLoanStatus.RETURNED,
+  EquipmentLoanStatus.REJECTED,
+  EquipmentLoanStatus.CANCELLED,
+];
 
 const LOAN_HISTORY_INCLUDE = {
   borrower: { select: { id: true, uid: true, displayName: true } },
@@ -47,6 +53,17 @@ const RESERVATION_HISTORY_INCLUDE = {
   checker: { select: { id: true, displayName: true } },
   approver: { select: { id: true, displayName: true } },
 } satisfies Prisma.RoomReservationInclude;
+
+const EQUIPMENT_LOAN_HISTORY_INCLUDE = {
+  user: { select: { id: true, uid: true, displayName: true } },
+  items: {
+    include: {
+      equipment: {
+        select: { id: true, name: true, code: true, category: true },
+      },
+    },
+  },
+} satisfies Prisma.EquipmentLoanInclude;
 
 export interface TimelineEvent {
   label: string;
@@ -398,6 +415,36 @@ export const historyService = {
     }
 
     return { reservation, events };
+  },
+
+  // ---------------------- Equipment Loans ------------------------
+  // Tab "Peminjaman Alat" — equipment loan tidak punya audit row laboran
+  // handover/return, jadi non-admin scope = peminjam sendiri saja.
+  // Multi-item per loan, jadi shape mirroring "Barang Keluar" — frontend
+  // render 1 baris per loan dengan badge `+N lainnya`, detail di modal.
+  async listEquipmentLoans(params: {
+    skip?: number;
+    take?: number;
+    scope: HistoryScope;
+  }) {
+    const { skip = 0, take = 50, scope } = params;
+    const where: Prisma.EquipmentLoanWhereInput = {
+      status: { in: EQUIPMENT_LOAN_FINAL_STATUSES },
+    };
+    if (!scope.isAdmin) {
+      where.userId = scope.userId;
+    }
+    const [items, total] = await Promise.all([
+      prisma.equipmentLoan.findMany({
+        where,
+        skip,
+        take,
+        orderBy: { updatedAt: "desc" },
+        include: EQUIPMENT_LOAN_HISTORY_INCLUDE,
+      }),
+      prisma.equipmentLoan.count({ where }),
+    ]);
+    return { items, total, skip, take };
   },
 
   // ---------------------- Consumables (Barang Keluar) -------------------

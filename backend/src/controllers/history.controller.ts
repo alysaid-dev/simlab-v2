@@ -76,6 +76,13 @@ export const historyController = {
     res.json(result);
   }),
 
+  listEquipmentLoans: asyncHandler(async (req, res) => {
+    const q = listQuery.parse(req.query);
+    const scope = await deriveScope(req);
+    const result = await historyService.listEquipmentLoans({ ...q, scope });
+    res.json(result);
+  }),
+
   loanTimeline: asyncHandler(async (req, res) => {
     const scope = await deriveScope(req);
     const result = await historyService.loanTimeline(req.params.id!, scope);
