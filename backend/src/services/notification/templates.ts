@@ -1023,6 +1023,9 @@ export interface LoanReturnedToMahasiswaParams {
   hariTelat?: number;
   /** Total denda (pre-formatted, mis. "Rp50.000"). Dihitung caller. */
   totalDenda?: string;
+  /** True kalau loan adalah TA — ajakan ajukan Surat Bebas Lab muncul.
+   *  Untuk PRACTICUM, set false (mahasiswa praktikum tidak relevan dengan yudisium). */
+  showBebasLabHint?: boolean;
   linkSimlab?: string;
 }
 
@@ -1047,7 +1050,10 @@ export function loanReturnedToMahasiswa(p0: LoanReturnedToMahasiswaParams): Noti
              Terdapat keterlambatan <strong>${p0.hariTelat} hari</strong>. Denda yang dikenakan: <strong>${p0.totalDenda}</strong>. Mohon segera melunasi denda di laboratorium.
            </div>`
         : '') +
-      p('Terima kasih telah mengembalikan laptop sesuai prosedur. Apabila Anda sedang mempersiapkan sidang, silakan ajukan <strong>Surat Keterangan Bebas Laboratorium</strong> melalui SIMLAB jika sudah tidak memiliki tanggungan.'),
+      p('Terima kasih telah mengembalikan laptop sesuai prosedur.') +
+      (p0.showBebasLabHint
+        ? p('Apabila Anda telah dinyatakan lulus sidang dan akan mendaftar yudisium, silakan ajukan <strong>Surat Keterangan Bebas Laboratorium</strong> melalui SIMLAB jika sudah tidak memiliki tanggungan.')
+        : ''),
     linkSimlab: link,
     linkLabel: 'Buka SIMLAB',
   });
@@ -1067,7 +1073,7 @@ ${waDetails([
   ...(p0.catatan ? ([['📝 Catatan', p0.catatan]] as Array<[string, string]>) : []),
 ])}
 ${isLate ? `\n⚠️ Terlambat ${p0.hariTelat} hari — denda: *${p0.totalDenda}*. Mohon segera dilunasi di laboratorium.\n` : ''}
-Terima kasih. Jika akan sidang, silakan ajukan Surat Bebas Lab melalui SIMLAB bila sudah tidak ada tanggungan.
+Terima kasih.${p0.showBebasLabHint ? '\n\nApabila telah lulus sidang dan akan mendaftar yudisium, silakan ajukan Surat Bebas Lab melalui SIMLAB bila sudah tidak ada tanggungan.' : ''}
 
 🔗 ${link}${WA_FOOTER}`;
   return { subject, html, whatsapp };

@@ -12,6 +12,7 @@ import {
   notifyCancelledBySystemToMahasiswa,
   notifyLoanActivatedToMahasiswa,
   notifyLoanApprovalToDosen,
+  notifyLoanApprovalToKalab,
   notifyLoanApprovedByDosenToMahasiswa,
   notifyLoanApprovedByKalabToMahasiswa,
   notifyLoanApprovedToLaboran,
@@ -201,6 +202,33 @@ export const loansController = {
         mahasiswaRecipient,
         commonLoanParams,
       );
+
+      // Laptop global (laboratoryId null) → semua kalab aktif perlu tahu.
+      // Pola sama dengan loop laboran di branch APPROVED.
+      const kalabs = await prisma.user.findMany({
+        where: {
+          isActive: true,
+          roles: { some: { role: { name: "KEPALA_LAB" } } },
+        },
+        select: { displayName: true, email: true, waNumber: true },
+      });
+      const waktuPersetujuan = fmtDateTime(new Date());
+      for (const kalab of kalabs) {
+        if (!kalab.email && !kalab.waNumber) continue;
+        void notifyLoanApprovalToKalab(
+          {
+            email: kalab.email ?? undefined,
+            phone: kalab.waNumber ?? undefined,
+          },
+          {
+            kalabName: kalab.displayName,
+            namaMahasiswa: loan.borrower.displayName,
+            nim: loan.borrower.uid,
+            disetujuiOleh: actor.displayName,
+            waktuPersetujuan,
+          },
+        );
+      }
     } else if (status === LoanStatus.ACTIVE) {
       // Step 12 — serah terima selesai oleh laboran. Kirim konfirmasi
       // peminjaman aktif + tanggal harus kembali ke mahasiswa.
@@ -262,6 +290,7 @@ export const loansController = {
         catatan: returnNote || undefined,
         hariTelat,
         totalDenda,
+        showBebasLabHint: loan.type === LoanType.TA,
       });
     } else if (status === LoanStatus.CANCELLED) {
       // Super Admin membatalkan via Monitor Transaksi — kirim notifikasi
