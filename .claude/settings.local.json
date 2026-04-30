@@ -141,7 +141,17 @@
       "Bash(sudo -n /usr/bin/journalctl -u simlab-v2-be --no-pager -n 150)",
       "Bash(sudo -n /usr/bin/journalctl -u simlab-v2-be --no-pager -n 200)",
       "Bash(sudo -n /usr/bin/journalctl -u simlab-v2-be -n 120 --no-pager)",
-      "Bash(sudo -n /usr/bin/journalctl -u simlab-v2-be --since \"10:15\" --no-pager)"
+      "Bash(sudo -n /usr/bin/journalctl -u simlab-v2-be --since \"10:15\" --no-pager)",
+      "Bash(pandoc --version)",
+      "Bash(python3 -c \"import docx\")",
+      "Bash(apt list *)",
+      "Bash(sudo -n apt-get install -y pandoc)",
+      "Bash(awk '{print $NF}')",
+      "Bash(pandoc simlab-v2-teknis.md -o simlab-v2-teknis.docx --toc --toc-depth=2 --number-sections)",
+      "Bash(pandoc simlab-v2-urd.md -o simlab-v2-urd.docx --toc --toc-depth=2 --number-sections)",
+      "Bash(git -C /var/www/simlab-v2 ls-files .claude/settings.local.json)",
+      "Bash(git -C /var/www/simlab-v2 log --all --oneline -- .claude/settings.local.json)",
+      "Bash(git *)"
     ]
   }
 }
