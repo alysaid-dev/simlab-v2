@@ -15,7 +15,7 @@ const LOAN_INCLUDE = {
   user: { select: { id: true, displayName: true, uid: true, email: true, waNumber: true } },
   items: {
     include: {
-      equipment: { select: { id: true, name: true, category: true } },
+      equipment: { select: { id: true, name: true, code: true, category: true } },
     },
   },
 } satisfies Prisma.EquipmentLoanInclude;

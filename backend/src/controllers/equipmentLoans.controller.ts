@@ -99,7 +99,9 @@ export const equipmentLoansController = {
     });
 
     if (loan.status === EquipmentLoanStatus.ACTIVE) {
-      await notifyEquipmentLoanActivatedToMahasiswa(
+      // Fire-and-forget: SMTP + Fonnte bisa lambat / 502, tidak boleh
+      // blocking response. Error tetap di-log untuk troubleshooting.
+      void notifyEquipmentLoanActivatedToMahasiswa(
         { email: loan.user.email ?? undefined, phone: loan.user.waNumber ?? undefined },
         {
           namaMahasiswa: loan.user.displayName,
@@ -127,7 +129,7 @@ export const equipmentLoansController = {
 
     if (status === EquipmentLoanStatus.RETURNED) {
       const requester = await usersService.getByUid(req.user!.uid);
-      await notifyEquipmentLoanReturnedToMahasiswa(
+      void notifyEquipmentLoanReturnedToMahasiswa(
         { email: loan.user.email ?? undefined, phone: loan.user.waNumber ?? undefined },
         {
           namaMahasiswa: loan.user.displayName,
@@ -155,7 +157,7 @@ export const equipmentLoansController = {
       body.endDate && body.endDate.getTime() !== previous.endDate.getTime();
     if (didExtend) {
       const requester = await usersService.getByUid(req.user!.uid);
-      await notifyEquipmentLoanExtendedToMahasiswa(
+      void notifyEquipmentLoanExtendedToMahasiswa(
         { email: loan.user.email ?? undefined, phone: loan.user.waNumber ?? undefined },
         {
           namaMahasiswa: loan.user.displayName,

@@ -22,6 +22,12 @@ import {
 } from "lucide-react";
 import { useDialog } from "../lib/dialog";
 import { apiFetch } from "../lib/apiFetch";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../components/ui/dropdown-menu";
 
 type View = "transaksi" | "peminjaman-aktif" | "terlambat" | "aset" | "riwayat";
 type ToolCondition = "Baik" | "Rusak Ringan" | "Rusak Berat" | "Hilang";
@@ -65,7 +71,7 @@ interface BackendEqLoanItem {
   id: string;
   equipmentId: string;
   quantity: number;
-  equipment?: { id: string; name: string; category: string | null };
+  equipment?: { id: string; name: string; code: string | null; category: string | null };
 }
 
 interface BackendEquipmentLoan {
@@ -220,7 +226,6 @@ export default function PeminjamanAlat() {
   const [toolCondition, setToolCondition] = useState<ToolCondition>("Baik");
   const [returnNotes, setReturnNotes] = useState("");
   const [extensionDate, setExtensionDate] = useState("2026-04-29");
-  const [openDropdownIndex, setOpenDropdownIndex] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState("Semua");
 
   // Aset states
@@ -509,7 +514,7 @@ export default function PeminjamanAlat() {
       userName: l.user?.displayName ?? "-",
       tools: l.items.map((it) => ({
         name: it.equipment?.name ?? "-",
-        id: it.equipmentId,
+        id: it.equipment?.code ?? "-",
         quantity: it.quantity,
         returnCondition: "Baik",
       })),
@@ -654,9 +659,13 @@ export default function PeminjamanAlat() {
     }
   };
 
-  const filteredTools = toolsCatalog.filter((tool) =>
-    tool.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredTools = toolsCatalog.filter((tool) => {
+    const q = searchTerm.toLowerCase();
+    return (
+      tool.name.toLowerCase().includes(q) ||
+      tool.code.toLowerCase().includes(q)
+    );
+  });
 
   const filteredActiveBorrowings = activeBorrowings.filter((borrowing) => {
     if (statusFilter === "Semua") return true;
@@ -1049,41 +1058,40 @@ export default function PeminjamanAlat() {
                         {borrowing.status}
                       </span>
                     </td>
-                    <td className="py-3 px-4 relative">
-                      <button
-                        onClick={() => {
-                          setSelectedBorrowing(borrowing);
-                          setOpenDropdownIndex(openDropdownIndex === index ? null : index);
-                        }}
-                        className="px-4 py-2 border border-gray-300 rounded-lg text-sm flex items-center gap-2 hover:bg-gray-50"
-                      >
-                        Tindakan
-                        <ChevronDown className="w-4 h-4" />
-                      </button>
-                      {openDropdownIndex === index && (
-                        <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+                    <td className="py-3 px-4">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
                           <button
-                            onClick={() => {
+                            onClick={() => setSelectedBorrowing(borrowing)}
+                            className="px-4 py-2 border border-gray-300 rounded-lg text-sm flex items-center gap-2 hover:bg-gray-50"
+                          >
+                            Tindakan
+                            <ChevronDown className="w-4 h-4" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                          <DropdownMenuItem
+                            onSelect={() => {
+                              setSelectedBorrowing(borrowing);
                               setShowKembalikanModal(true);
-                              setOpenDropdownIndex(null);
                             }}
-                            className="flex items-center gap-2 w-full px-4 py-2.5 text-left text-gray-700 hover:bg-gray-50"
+                            className="gap-2 py-2.5"
                           >
                             <Undo2 className="w-4 h-4" />
                             Kembalikan
-                          </button>
-                          <button
-                            onClick={() => {
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onSelect={() => {
+                              setSelectedBorrowing(borrowing);
                               setShowPerpanjangModal(true);
-                              setOpenDropdownIndex(null);
                             }}
-                            className="flex items-center gap-2 w-full px-4 py-2.5 text-left text-gray-700 hover:bg-gray-50"
+                            className="gap-2 py-2.5"
                           >
                             <Calendar className="w-4 h-4" />
                             Perpanjang
-                          </button>
-                        </div>
-                      )}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </td>
                   </tr>
                 ))}
@@ -1407,6 +1415,8 @@ export default function PeminjamanAlat() {
               <div className="relative">
                 <input
                   type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Cari nama atau ID alat..."
                   className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
