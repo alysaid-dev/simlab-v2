@@ -199,10 +199,6 @@ export default function PeminjamanRuangan() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!suratFile) {
-      setSuratError("Surat permohonan wajib diunggah.");
-      return;
-    }
     setSubmitting(true);
     setSubmitOk(false);
     try {
@@ -213,7 +209,7 @@ export default function PeminjamanRuangan() {
       data.append("endTime", new Date(form.endTime).toISOString());
       if (form.notes) data.append("notes", form.notes);
       if (form.noWhatsapp) data.append("waNumber", form.noWhatsapp);
-      data.append("surat", suratFile);
+      if (suratFile) data.append("surat", suratFile);
 
       const res = await fetch(`${API_BASE}/api/reservations`, {
         method: "POST",
@@ -438,7 +434,7 @@ export default function PeminjamanRuangan() {
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          Unggah Surat Permohonan <span className="text-red-500">*</span>
+          Unggah Surat Permohonan
         </label>
         <label
           className={`flex items-center gap-3 px-4 py-3 border-2 border-dashed rounded-lg cursor-pointer hover:bg-gray-50 transition-colors ${
@@ -465,7 +461,6 @@ export default function PeminjamanRuangan() {
           <input
             type="file"
             accept="application/pdf,.pdf"
-            required
             onChange={handleSuratChange}
             className="hidden"
           />
@@ -486,8 +481,7 @@ export default function PeminjamanRuangan() {
             submitting ||
             !form.roomId ||
             !form.purpose ||
-            !form.noWhatsapp ||
-            !suratFile
+            !form.noWhatsapp
           }
           className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
         >

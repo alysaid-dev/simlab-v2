@@ -149,17 +149,16 @@ export const reservationsController = {
       });
     }
 
-    // Surat permohonan — wajib ada (divalidasi di upload middleware juga).
+    // Surat permohonan opsional — multer fileFilter tetap memvalidasi tipe & ukuran kalau ada.
     const file = (req as typeof req & { file?: Express.Multer.File }).file;
-    if (!file) {
-      throw new HttpError(400, "Surat permohonan wajib diunggah (PDF, maks 200KB)");
-    }
 
     const { waNumber: _waNumber, ...rest } = body;
     const reservation = await reservationsService.create({
       ...rest,
       userId: requester.id,
-      suratPermohonanPath: path.relative(path.resolve("."), file.path),
+      suratPermohonanPath: file
+        ? path.relative(path.resolve("."), file.path)
+        : undefined,
     });
 
     const tanggalPinjam = formatTanggalPinjam(reservation.startTime);
