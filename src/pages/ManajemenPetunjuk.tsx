@@ -667,6 +667,18 @@ function EditorView({
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       rehypePlugins={[rehypeSanitize]}
+                      components={{
+                        img: ({ src, ...rest }) => (
+                          <img
+                            src={
+                              typeof src === "string" && src.startsWith("/api/")
+                                ? `${API_BASE}${src}`
+                                : src
+                            }
+                            {...rest}
+                          />
+                        ),
+                      }}
                     >
                       {content}
                     </ReactMarkdown>
