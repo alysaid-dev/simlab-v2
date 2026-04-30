@@ -66,6 +66,13 @@ const modules: ModuleTile[] = [
     link: "/persetujuan-laboran",
   },
   {
+    title: "Manajemen Aset Laptop",
+    description: "Manajemen aset laptop Laboratorium Statistika",
+    bgColor: "bg-gradient-to-br from-amber-600 to-orange-500",
+    icon: "laptop",
+    link: "/aset",
+  },
+  {
     title: "Transaksi Laptop",
     description: "Proses transaksi peminjaman laptop",
     bgColor: "bg-gradient-to-br from-blue-600 to-indigo-500",
@@ -78,13 +85,6 @@ const modules: ModuleTile[] = [
     bgColor: "bg-gradient-to-br from-cyan-600 to-teal-500",
     icon: "wrench",
     link: "/peminjaman-alat",
-  },
-  {
-    title: "Manajemen Aset Laptop",
-    description: "Manajemen aset laptop Laboratorium Statistika",
-    bgColor: "bg-gradient-to-br from-amber-600 to-orange-500",
-    icon: "laptop",
-    link: "/aset",
   },
   {
     title: "Transaksi Habis Pakai",
